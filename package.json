@@ -1,9 +1,9 @@
 {
   "name": "mrgminner",
   "displayName": "MRGMinner",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
-  "description": "MRGMinner \u2014 MergeOS task runner with MRG chain discovery, work split, claim-block clusters, and VS Code bridge.",
+  "description": "MRGMinner \u2014 MergeOS miner: discoverable MRG chain, work-split packs, claim intents, Solana proof anchors, claim-block clusters, VS Code bridge.",
   "main": "./src/extension.js",
   "bin": {
     "mrgminner": "./bin/mrgminner.js",

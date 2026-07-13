@@ -19,7 +19,7 @@ test("buildTaskPrompt includes MergeOS task and commit workflow", () => {
   assert.match(prompt, /Fix checkout ledger/);
   assert.match(prompt, /Ledger proof must be visible/);
   assert.match(prompt, /MRGMinner tsk_123:/);
-  assert.match(prompt, /mergeide claim/);
-  assert.match(prompt, /mergeide submit --pr-url/);
+  assert.match(prompt, /mrgminner claim --with-intent/);
+  assert.match(prompt, /mrgminner submit --pr-url/);
   assert.doesNotMatch(prompt, /claim the payout/);
 });

@@ -38,7 +38,7 @@ function buildTaskPrompt(task, options = {}) {
     "5. Submit pull request or evidence URL back to MergeOS for customer/admin review.",
     "6. Do not release payout yourself; payout is released only after review.",
     "",
-    "Use mergeide claim to reserve the worker lane, then mergeide submit --pr-url <url> to attach review evidence."
+    "Use mrgminner market / chain to discover MRG work, mrgminner claim --with-intent to bind ledger tip, then mrgminner submit --pr-url <url> --with-intent for review evidence."
   ].join("\n");
 }
 

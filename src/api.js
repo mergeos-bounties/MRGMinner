@@ -110,6 +110,43 @@ async function getPublicConfig(settings) {
   }
 }
 
+async function getSolanaProofManifest(settings) {
+  const baseUrl = normalizeBaseUrl(settings.mergeos && settings.mergeos.baseUrl);
+  const paths = [
+    "/contracts/solana/mergeos_mrg.proof-manifest.v1.json",
+    "/api/public/contracts/solana/mergeos_mrg.proof-manifest.v1.json"
+  ];
+  for (const route of paths) {
+    try {
+      const response = await fetch(`${baseUrl}${route}`, {
+        method: "GET",
+        headers: { Accept: "application/json" }
+      });
+      if (!response.ok) {
+        continue;
+      }
+      const text = await response.text();
+      return text ? parseJson(text) : null;
+    } catch {
+      // try next path
+    }
+  }
+  // Absolute public shop fallback (works even if local baseUrl has no contracts)
+  try {
+    const response = await fetch("https://mergeos.shop/contracts/solana/mergeos_mrg.proof-manifest.v1.json", {
+      method: "GET",
+      headers: { Accept: "application/json" }
+    });
+    if (!response.ok) {
+      return null;
+    }
+    const text = await response.text();
+    return text ? parseJson(text) : null;
+  } catch {
+    return null;
+  }
+}
+
 async function findTask(settings, taskID) {
   const tasks = await listTasks(settings);
   const ref = String(taskID || "").trim();
@@ -193,6 +230,33 @@ function agentActionPayload(payload = {}) {
   if (payload.delegation_chain || payload.delegationChain) {
     body.delegation_chain = listValue(payload.delegation_chain || payload.delegationChain);
   }
+  // Discoverable MRG chain binding (intent / pack / ledger tip)
+  const chain = payload.chain_binding || payload.chainBinding || payload.claim_metadata || null;
+  if (chain && typeof chain === "object") {
+    body.chain_binding = compactPayload({
+      protocol: chain.mrgminner_protocol || chain.protocol || "mrgminner.claim-intent.v2",
+      intent_id: chain.intent_id,
+      intent_hash: chain.intent_hash,
+      pack_hash: chain.pack_hash,
+      claim_block_id: chain.claim_block_id,
+      ledger_tip_hash: chain.ledger_tip_hash,
+      ledger_reference: chain.ledger_reference,
+      reward_mrg: chain.reward_mrg,
+      worker_id: chain.worker_id,
+      solana_program_id: chain.solana_program_id || (chain.solana && chain.solana.program_id)
+    });
+    if (body.chain_binding.intent_hash || body.chain_binding.ledger_tip_hash) {
+      const chainLines = [
+        body.chain_binding.intent_id && `intent_id=${body.chain_binding.intent_id}`,
+        body.chain_binding.intent_hash && `intent_hash=${body.chain_binding.intent_hash}`,
+        body.chain_binding.pack_hash && `pack_hash=${body.chain_binding.pack_hash}`,
+        body.chain_binding.ledger_tip_hash && `ledger_tip=${body.chain_binding.ledger_tip_hash}`,
+        body.chain_binding.ledger_reference && `ledger_ref=${body.chain_binding.ledger_reference}`,
+        body.chain_binding.reward_mrg != null && `reward_mrg=${body.chain_binding.reward_mrg}`
+      ].filter(Boolean);
+      body.evidence = [...(body.evidence || []), ...chainLines];
+    }
+  }
   return compactPayload(body);
 }
 
@@ -238,6 +302,7 @@ module.exports = {
   getMarketplace,
   getPublicConfig,
   getPublicLedger,
+  getSolanaProofManifest,
   getTokenEconomy,
   listProtocolAgents,
   listTasks,
