@@ -10,7 +10,7 @@
 
 Extracted from the [mergeos](https://github.com/mergeos-bounties/mergeos) monorepo (`MergeIDE/`) into a standalone public product.
 
-![MRGMinner task runner](docs/mergeide-screenshot.png)
+![MRGMinner task runner](docs/mrgminner-screenshot.png)
 
 ---
 
@@ -20,7 +20,7 @@ Extracted from the [mergeos](https://github.com/mergeos-bounties/mergeos) monore
 | --- | --- |
 | **CLI** | `mrgminner` / `mergeide` (alias) — tasks, claim, run, submit |
 | **AI presets** | Codex, Claude, or custom CLI with prompt placeholders |
-| **VS Code extension** | Same package loads as an extension (MergeIDE command palette titles) |
+| **VS Code extension** | Same package loads as an extension (MRGMinner command palette titles) |
 | **Windows exe** | GitHub Actions packages `MRGMinner-Windows-x64.exe` |
 | **Safety** | Never calls task **accept** / payout release |
 

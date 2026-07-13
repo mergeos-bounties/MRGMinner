@@ -38,27 +38,27 @@
     "commands": [
       {
         "command": "mergeide.showTasks",
-        "title": "MergeIDE: Show MergeOS Tasks"
+        "title": "MRGMinner: Show MergeOS Tasks"
       },
       {
         "command": "mergeide.runTask",
-        "title": "MergeIDE: Run Task With AI CLI"
+        "title": "MRGMinner: Run Task With AI CLI"
       },
       {
         "command": "mergeide.claimTask",
-        "title": "MergeIDE: Claim Task"
+        "title": "MRGMinner: Claim Task"
       },
       {
         "command": "mergeide.submitTask",
-        "title": "MergeIDE: Submit Task Evidence"
+        "title": "MRGMinner: Submit Task Evidence"
       },
       {
         "command": "mergeide.configureAiCli",
-        "title": "MergeIDE: Configure AI CLI"
+        "title": "MRGMinner: Configure AI CLI"
       }
     ],
     "configuration": {
-      "title": "MergeIDE",
+      "title": "MRGMinner",
       "properties": {
         "mergeide.mergeosUrl": {
           "type": "string",
@@ -78,7 +78,7 @@
             "claude",
             "custom"
           ],
-          "description": "AI CLI preset used by MergeIDE."
+          "description": "AI CLI preset used by MRGMinner."
         },
         "mergeide.aiCommand": {
           "type": "string",
