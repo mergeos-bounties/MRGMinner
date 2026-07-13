@@ -198,6 +198,9 @@ async function nextCommand(flags) {
     console.log("No open MergeOS task matched the current filters.");
     return;
   }
+  if (flags.dryRun) {
+    return dryRunNext(settings, task, flags);
+  }
   console.log(`Selected ${task.id}: ${task.title}`);
   const result = await runAIForTask(settings, task, {
     workspaceRoot: flags.workspace
@@ -292,6 +295,54 @@ function buildCompareNotes(task, results, artifacts) {
     }
   }
   return lines.join("\n");
+}
+
+async function dryRunNext(settings, task, flags) {
+  const artifacts = await prepareTaskArtifacts(settings, task, {
+    workspaceRoot: flags.workspace
+  });
+  let invocation = null;
+  try {
+    invocation = resolveAIInvocation(settings, artifacts, task);
+  } catch (error) {
+    invocation = { command: "", args: [], error: error.message };
+  }
+  if (flags.json) {
+    console.log(JSON.stringify({
+      dry_run: true,
+      selected: {
+        id: task.id,
+        title: task.title,
+        status: task.status,
+        required_worker_kind: task.required_worker_kind,
+        suggested_agent_type: task.suggested_agent_type,
+        reward_mrg: Number(task.reward_cents || 0) / 100
+      },
+      workspace_root: artifacts.workspaceRoot,
+      prompt_file: artifacts.promptFile,
+      task_file: artifacts.taskFile,
+      ai_command: invocation.command,
+      ai_args: invocation.args,
+      ai_error: invocation.error || null,
+      prompt: artifacts.prompt
+    }, null, 2));
+    return;
+  }
+  console.log(`# MRGMinner next --dry-run (no AI CLI invoked)`);
+  console.log(`Selected ${task.id}: ${task.title}`);
+  console.log(`status\t${task.status}`);
+  console.log(`required_worker_kind\t${task.required_worker_kind || "—"}`);
+  console.log(`suggested_agent_type\t${task.suggested_agent_type || "—"}`);
+  console.log(`workspace_root\t${artifacts.workspaceRoot}`);
+  console.log(`prompt_file\t${artifacts.promptFile}`);
+  if (invocation.error) {
+    console.log(`ai_cli\t(not configured: ${invocation.error})`);
+  } else {
+    console.log(`ai_cli\t${[invocation.command, ...invocation.args].join(" ")}`);
+  }
+  console.log("");
+  console.log("# --- prompt ---");
+  console.log(artifacts.prompt);
 }
 
 function parseFlags(args) {
@@ -1240,7 +1291,7 @@ Usage:
   mrgminner claim <task-id> [--with-intent]
   mrgminner submit <task-id> --pr-url <url> [--with-intent]
   mrgminner compare [--presets codex,claude] [--kind agent]
-  mrgminner next [--kind agent] [--claim] [--submit --pr-url <url>]
+  mrgminner next [--kind agent] [--dry-run] [--claim] [--submit --pr-url <url>]
 
   # Agent nodes + claim-block cluster
   mrgminner nodes [--online] [--role job|review|audit] [--json] [--mock]
