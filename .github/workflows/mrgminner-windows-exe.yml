@@ -24,6 +24,7 @@ env:
   MERGEIDE_EXE_NAME: MRGMinner-Windows-x64.exe
   MERGEIDE_CHECKSUM_NAME: MRGMinner-Windows-x64.exe.sha256
   MERGEIDE_BUILD_INFO_NAME: MRGMinner-Windows-x64.build.json
+  MERGEIDE_PORTABLE_NAME: MRGMinner-Windows-x64.zip
   MERGEIDE_DEFAULT_RELEASE_TAG: mrgminner-windows-latest
 
 concurrency:
@@ -79,6 +80,7 @@ jobs:
           "MERGEIDE_DOWNLOAD_URL=$repoUrl/releases/download/$tag/$env:MERGEIDE_EXE_NAME" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "MERGEIDE_CHECKSUM_URL=$repoUrl/releases/download/$tag/$env:MERGEIDE_CHECKSUM_NAME" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "MERGEIDE_BUILD_INFO_URL=$repoUrl/releases/download/$tag/$env:MERGEIDE_BUILD_INFO_NAME" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "MERGEIDE_PORTABLE_URL=$repoUrl/releases/download/$tag/$env:MERGEIDE_PORTABLE_NAME" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "MERGEIDE_WORKFLOW_RUN_URL=$repoUrl/actions/runs/$env:GITHUB_RUN_ID" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "MERGEIDE_WORKFLOW_ARTIFACTS_URL=$repoUrl/actions/runs/$env:GITHUB_RUN_ID#artifacts" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
@@ -119,6 +121,12 @@ jobs:
         shell: pwsh
         run: .\dist\MRGMinner-Windows-x64.exe --help
 
+      - name: Create portable zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist/$env:MERGEIDE_EXE_NAME", "dist/$env:MERGEIDE_CHECKSUM_NAME", "dist/$env:MERGEIDE_BUILD_INFO_NAME" -DestinationPath "dist/$env:MERGEIDE_PORTABLE_NAME" -Force
+          Write-Host "Portable zip created: dist/$env:MERGEIDE_PORTABLE_NAME"
+
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v7
         with:
@@ -127,6 +135,7 @@ jobs:
             dist/${{ env.MERGEIDE_EXE_NAME }}
             dist/${{ env.MERGEIDE_CHECKSUM_NAME }}
             dist/${{ env.MERGEIDE_BUILD_INFO_NAME }}
+            dist/${{ env.MERGEIDE_PORTABLE_NAME }}
           if-no-files-found: error
           retention-days: 30
 
@@ -165,6 +174,7 @@ jobs:
             "dist/$env:MERGEIDE_EXE_NAME" `
             "dist/$env:MERGEIDE_CHECKSUM_NAME" `
             "dist/$env:MERGEIDE_BUILD_INFO_NAME" `
+            "dist/$env:MERGEIDE_PORTABLE_NAME" `
             --clobber
 
           $release = gh release view $tag --json assets,tagName,url | ConvertFrom-Json
@@ -172,7 +182,8 @@ jobs:
           $expectedAssets = @(
             $env:MERGEIDE_EXE_NAME,
             $env:MERGEIDE_CHECKSUM_NAME,
-            $env:MERGEIDE_BUILD_INFO_NAME
+            $env:MERGEIDE_BUILD_INFO_NAME,
+            $env:MERGEIDE_PORTABLE_NAME
           )
           foreach ($asset in $expectedAssets) {
             if ($assetNames -notcontains $asset) {
@@ -184,7 +195,8 @@ jobs:
           "" >> $env:GITHUB_STEP_SUMMARY
           "- MRGMinner page: $mergeIDEPage" >> $env:GITHUB_STEP_SUMMARY
           "- Release: $env:MERGEIDE_RELEASE_URL" >> $env:GITHUB_STEP_SUMMARY
-          "- Download: $env:MERGEIDE_DOWNLOAD_URL" >> $env:GITHUB_STEP_SUMMARY
+          "- Download (exe): $env:MERGEIDE_DOWNLOAD_URL" >> $env:GITHUB_STEP_SUMMARY
+          "- Download (portable zip): $env:MERGEIDE_PORTABLE_URL" >> $env:GITHUB_STEP_SUMMARY
           "- SHA256 file: $env:MERGEIDE_CHECKSUM_URL" >> $env:GITHUB_STEP_SUMMARY
           "- Build metadata: $env:MERGEIDE_BUILD_INFO_URL" >> $env:GITHUB_STEP_SUMMARY
           "- Workflow run: $env:MERGEIDE_WORKFLOW_RUN_URL" >> $env:GITHUB_STEP_SUMMARY

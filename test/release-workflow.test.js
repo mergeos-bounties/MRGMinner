@@ -16,8 +16,11 @@ test("Windows exe workflow publishes the stable MRGMinner release asset contract
   assert.match(workflow, /MERGEIDE_EXE_NAME: MRGMinner-Windows-x64\.exe/);
   assert.match(workflow, /MERGEIDE_CHECKSUM_NAME: MRGMinner-Windows-x64\.exe\.sha256/);
   assert.match(workflow, /MERGEIDE_BUILD_INFO_NAME: MRGMinner-Windows-x64\.build\.json/);
+  assert.match(workflow, /MERGEIDE_PORTABLE_NAME: MRGMinner-Windows-x64\.zip/);
   assert.match(workflow, /run: npm run build:exe/);
   assert.match(workflow, /run: \.\\dist\\MRGMinner-Windows-x64\.exe --help/);
+  assert.match(workflow, /Create portable zip/);
+  assert.match(workflow, /Compress-Archive.*MERGEIDE_PORTABLE_NAME/);
   assert.match(workflow, /MERGEIDE_DOWNLOAD_URL=\$repoUrl\/releases\/download\/\$tag\/\$env:MERGEIDE_EXE_NAME/);
   assert.match(workflow, /MERGEIDE_CHECKSUM_URL=\$repoUrl\/releases\/download\/\$tag\/\$env:MERGEIDE_CHECKSUM_NAME/);
   assert.match(workflow, /MERGEIDE_BUILD_INFO_URL=\$repoUrl\/releases\/download\/\$tag\/\$env:MERGEIDE_BUILD_INFO_NAME/);
@@ -26,11 +29,13 @@ test("Windows exe workflow publishes the stable MRGMinner release asset contract
   assert.match(workflow, /dist\/\$\{\{ env\.MERGEIDE_EXE_NAME \}\}/);
   assert.match(workflow, /dist\/\$\{\{ env\.MERGEIDE_CHECKSUM_NAME \}\}/);
   assert.match(workflow, /dist\/\$\{\{ env\.MERGEIDE_BUILD_INFO_NAME \}\}/);
+  assert.match(workflow, /dist\/\$\{\{ env\.MERGEIDE_PORTABLE_NAME \}\}/);
   assert.match(workflow, /gh release upload \$tag/);
   assert.match(workflow, /--clobber/);
   assert.match(workflow, /gh release view \$tag --json assets,tagName,url/);
   assert.match(workflow, /missing required MRGMinner asset/);
-  assert.match(workflow, /- Download: \$env:MERGEIDE_DOWNLOAD_URL/);
+  assert.match(workflow, /- Download \(exe\): \$env:MERGEIDE_DOWNLOAD_URL/);
+  assert.match(workflow, /- Download \(portable zip\): \$env:MERGEIDE_PORTABLE_URL/);
   assert.match(workflow, /- SHA256 file: \$env:MERGEIDE_CHECKSUM_URL/);
   assert.match(workflow, /- Build metadata: \$env:MERGEIDE_BUILD_INFO_URL/);
 });

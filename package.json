@@ -13,7 +13,8 @@
     "start": "node ./bin/mrgminner.js",
     "tasks": "node ./bin/mrgminner.js tasks",
     "test": "node --test",
-    "build:exe": "pkg . --targets node22-win-x64 --compress GZip --output dist/MRGMinner-Windows-x64.exe"
+    "build:exe": "pkg . --targets node22-win-x64 --compress GZip --output dist/MRGMinner-Windows-x64.exe",
+    "build:portable": "npm run build:exe && node scripts/package-portable.js"
   },
   "keywords": [
     "mergeos",

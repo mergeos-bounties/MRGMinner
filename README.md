@@ -9,7 +9,7 @@
 
 **MRGMinner** is the MergeOS **miner / task runner**: discover funded **MRG** work on the public marketplace and ledger, form **claim-block** clusters (job + review + audit + hash proof), **split** jobs into packs bound to the ledger tip, build **claim intents** (and optional Solana `ledgerReference`), claim/run/submit with your AI CLI — without releasing payout (accept stays with owner/admin).
 
-**Product:** [mergeos-bounties/MRGMinner](https://github.com/mergeos-bounties/MRGMinner) · App: [mergeos.shop](https://mergeos.shop/) · Scan: [scan.mergeos.shop](https://scan.mergeos.shop/) · Contracts: [mergeos-contracts](https://github.com/mergeos-bounties/mergeos-contracts) · Funded: **`prj_0428`**
+**Product:** [mergeos-bounties/MRGMinner](https://github.com/mergeos-bounties/MRGMinner) · App: [mergeos.shop](https://mergeos.shop/) · Scan: [scan.mergeos.shop](https://scan.mergeos.shop/) · Contracts: [mergeos-contracts](https://github.com/mergeos-bounties/mergeos-contracts) · Funded: **`prj_0428`** · [Install guide](docs/INSTALL.md)
 
 ---
 
@@ -29,6 +29,19 @@
 ---
 
 ## Quick start
+
+### Portable download (Windows)
+
+Download `MRGMinner-Windows-x64.zip` from the [latest release](https://github.com/mergeos-bounties/MRGMinner/releases/tag/mrgminner-windows-latest), extract, and run:
+
+```powershell
+Expand-Archive -Path MRGMinner-Windows-x64.zip -DestinationPath C:\tools\mrgminner
+C:\tools\mrgminner\MRGMinner-Windows-x64.exe --help
+```
+
+See [docs/INSTALL.md](docs/INSTALL.md) for detailed install steps.
+
+### From source
 
 ```powershell
 cd MRGMinner
@@ -180,10 +193,20 @@ MRGMinner/
 ```powershell
 npm ci
 npm test
-npm run build:exe   # Windows exe via pkg
+npm run build:exe        # Windows standalone exe via pkg
+npm run build:portable   # exe + sha256 + metadata → MRGMinner-Windows-x64.zip
 ```
 
-Windows workflow: [`.github/workflows/mrgminner-windows-exe.yml`](.github/workflows/mrgminner-windows-exe.yml)
+Artifacts are written to `dist/`:
+
+| File | Description |
+|------|-------------|
+| `MRGMinner-Windows-x64.exe` | Standalone executable |
+| `MRGMinner-Windows-x64.exe.sha256` | SHA-256 checksum |
+| `MRGMinner-Windows-x64.build.json` | Build metadata (commit, run ID, release URLs) |
+| `MRGMinner-Windows-x64.zip` | Portable package (exe + checksum + metadata) |
+
+Windows CI: [`.github/workflows/mrgminner-windows-exe.yml`](.github/workflows/mrgminner-windows-exe.yml)
 
 ---
 
