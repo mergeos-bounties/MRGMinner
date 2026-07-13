@@ -4,7 +4,11 @@ const path = require("node:path");
 const { listTasks } = require("./api");
 const { loadSettings, mergeSettings, settingsPath } = require("./settings");
 
+const STATUS_BAR_REFRESH_MS = 60000;
+
 let vscode;
+let statusBarItem;
+let statusBarRefreshTimer;
 
 function activate(context) {
   vscode = require("vscode");
@@ -15,13 +19,58 @@ function activate(context) {
     vscode.commands.registerCommand("mergeide.submitTask", () => submitTask(context)),
     vscode.commands.registerCommand("mergeide.configureAiCli", () => configureAiCli())
   );
+
+  statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  statusBarItem.command = "mergeide.showTasks";
+  statusBarItem.tooltip = "MRGMinner: open MergeOS tasks (click to view)";
+  context.subscriptions.push(statusBarItem);
+  statusBarItem.show();
+
+  statusBarRefreshTimer = setInterval(() => refreshStatusBar(context), STATUS_BAR_REFRESH_MS);
+  context.subscriptions.push({ dispose: () => clearInterval(statusBarRefreshTimer) });
+
+  refreshStatusBar(context);
 }
 
-function deactivate() {}
+function deactivate() {
+  if (statusBarRefreshTimer) {
+    clearInterval(statusBarRefreshTimer);
+    statusBarRefreshTimer = undefined;
+  }
+}
+
+function countOpenTasks(tasks) {
+  if (!Array.isArray(tasks)) {
+    return 0;
+  }
+  return tasks.filter((task) => task && task.status === "open").length;
+}
+
+function formatStatusBarText(count) {
+  const label = count === 1 ? "task" : "tasks";
+  return `$(checklist) ${count} open MRG ${label}`;
+}
+
+async function refreshStatusBar(context) {
+  if (!statusBarItem) {
+    return;
+  }
+  try {
+    const settings = await extensionSettings();
+    const tasks = await listTasks(settings);
+    const openCount = countOpenTasks(tasks);
+    statusBarItem.text = formatStatusBarText(openCount);
+    statusBarItem.tooltip = `MRGMinner: ${openCount} open MergeOS task${openCount === 1 ? "" : "s"} · click to view`;
+  } catch (error) {
+    statusBarItem.text = "$(checklist) MRGMinner: — open tasks";
+    statusBarItem.tooltip = `MRGMinner: unable to load tasks (${error && error.message ? error.message : error})`;
+  }
+}
 
 async function showTasks(context) {
   const settings = await extensionSettings();
   const tasks = await listTasks(settings);
+  statusBarItem && (statusBarItem.text = formatStatusBarText(countOpenTasks(tasks)));
   const picked = await pickTask(tasks);
   if (!picked) {
     return;
@@ -38,6 +87,7 @@ async function showTasks(context) {
   } else if (action === "Open prompt only") {
     openTerminal(context, ["prompt", picked.task.id]);
   }
+  await refreshStatusBar(context);
 }
 
 async function runTask(context) {
@@ -164,5 +214,7 @@ function quote(value) {
 
 module.exports = {
   activate,
-  deactivate
+  countOpenTasks,
+  deactivate,
+  formatStatusBarText
 };
