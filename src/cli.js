@@ -4,8 +4,12 @@ const path = require("node:path");
 const {
   claimTask,
   findTask,
+  getLedgerProof,
   getLiveFeed,
+  getMarketplace,
+  getPublicConfig,
   getPublicLedger,
+  getTokenEconomy,
   listProtocolAgents,
   listTasks,
   login,
@@ -15,6 +19,18 @@ const {
 const { loadSettings, mergeSettings, parseArgList, readSettingsFile, saveSettings, settingsPath } = require("./settings");
 const { prepareTaskArtifacts, runAIForTask } = require("./runner");
 const { buildFleetReport, mockFleetPayload } = require("./nodes");
+const {
+  buildChainDiscovery,
+  buildClaimIntent,
+  discoverMarketplace,
+  mockChainDiscovery,
+  mockEconomy,
+  mockMarket,
+  mockProof,
+  splitWork,
+  summarizeLedgerProof,
+  summarizeTokenEconomy
+} = require("./chain");
 
 async function main(argv) {
   const [command = "help", ...rest] = argv;
@@ -43,6 +59,22 @@ async function main(argv) {
     case "block":
     case "claim-block":
       return blockCommand(flags);
+    case "token":
+    case "economy":
+      return tokenCommand(flags);
+    case "ledger":
+    case "proof":
+      return proofCommand(flags);
+    case "market":
+    case "discover":
+      return marketCommand(flags);
+    case "split":
+      return splitCommand(flags);
+    case "chain":
+    case "explore":
+      return chainCommand(flags);
+    case "intent":
+      return intentCommand(flags);
     case "help":
     case "--help":
     case "-h":
@@ -480,12 +512,311 @@ async function blockCommand(flags) {
   }
 }
 
+async function loadChainBundle(flags) {
+  if (flags.mock || flags.offline) {
+    return { discovery: mockChainDiscovery(), source: "mock" };
+  }
+  const settings = await loadSettings(flags.settings, settingsFromFlags(flags));
+  try {
+    const [economy, proof, market, agents, feed, ledger] = await Promise.all([
+      getTokenEconomy(settings),
+      getLedgerProof(settings),
+      getMarketplace(settings, Number(flags.limit || 40)),
+      listProtocolAgents(settings, Number(flags.limit || 50)),
+      getLiveFeed(settings, Number(flags.feedLimit || 40)),
+      getPublicLedger(settings, Number(flags.ledgerLimit || 30))
+    ]);
+    const fleet = buildFleetReport({
+      agents,
+      feed,
+      ledgerItems: ledger.length ? ledger : feed.items || []
+    });
+    const discovery = buildChainDiscovery({
+      economy,
+      proof,
+      market,
+      fleet,
+      options: { limit: Number(flags.limit || 25), maxPacks: Number(flags.maxPacks || 10) }
+    });
+    let config = null;
+    try {
+      config = await getPublicConfig(settings);
+    } catch {
+      config = null;
+    }
+    return { discovery, source: "live", settings, config };
+  } catch (error) {
+    if (flags.strict) {
+      throw error;
+    }
+    const discovery = mockChainDiscovery();
+    discovery.warning = `live chain unavailable (${error.message}); showing mock discovery`;
+    return { discovery, source: "mock-fallback" };
+  }
+}
+
+async function tokenCommand(flags) {
+  if (flags.mock || flags.offline) {
+    const token = summarizeTokenEconomy(mockEconomy());
+    if (flags.json) {
+      console.log(JSON.stringify(token, null, 2));
+      return;
+    }
+    printToken(token, "mock");
+    return;
+  }
+  const settings = await loadSettings(flags.settings, settingsFromFlags(flags));
+  try {
+    const economy = await getTokenEconomy(settings);
+    const token = summarizeTokenEconomy(economy);
+    if (flags.json) {
+      console.log(JSON.stringify(token, null, 2));
+      return;
+    }
+    printToken(token, "live");
+  } catch (error) {
+    if (flags.strict) throw error;
+    const token = summarizeTokenEconomy(mockEconomy());
+    console.log(`# live unavailable: ${error.message}`);
+    printToken(token, "mock-fallback");
+  }
+}
+
+function printToken(token, source) {
+  console.log(`# MRG token economy (${source}) · ${token.token_symbol}`);
+  console.log(`ledger_entries\t${token.stats.ledger_entry_count}`);
+  console.log(`escrow_events\t${token.stats.escrow_event_count}`);
+  console.log(`payouts\t${token.stats.payout_count}`);
+  console.log(`minted_cents\t${token.totals.minted_cents}`);
+  console.log(`task_reserve_cents\t${token.totals.task_reserve_cents}`);
+  console.log(`released_cents\t${token.totals.released_cents}`);
+  console.log(`remaining_reserve_cents\t${token.totals.remaining_reserve_cents}`);
+  console.log(`explore.scan\t${token.explore.scan}`);
+  console.log(`explore.proof\t${token.explore.ledger_proof}`);
+  if (token.balances && token.balances.length) {
+    console.log("# balances");
+    for (const b of token.balances.slice(0, 8)) {
+      console.log(`${b.id}\t${b.amount_cents}\t${b.label || b.role}`);
+    }
+  }
+}
+
+async function proofCommand(flags) {
+  if (flags.mock || flags.offline) {
+    const ledger = summarizeLedgerProof(mockProof());
+    if (flags.json) {
+      console.log(JSON.stringify(ledger, null, 2));
+      return;
+    }
+    printProof(ledger, "mock");
+    return;
+  }
+  const settings = await loadSettings(flags.settings, settingsFromFlags(flags));
+  try {
+    const proof = await getLedgerProof(settings);
+    const ledger = summarizeLedgerProof(proof);
+    if (flags.json) {
+      console.log(JSON.stringify(ledger, null, 2));
+      return;
+    }
+    printProof(ledger, "live");
+  } catch (error) {
+    if (flags.strict) throw error;
+    const ledger = summarizeLedgerProof(mockProof());
+    console.log(`# live unavailable: ${error.message}`);
+    printProof(ledger, "mock-fallback");
+  }
+}
+
+function printProof(ledger, source) {
+  console.log(`# MRG ledger proof (${source}) · valid=${ledger.valid}`);
+  console.log(`entries\t${ledger.entry_count}\tverified\t${ledger.verified_count}\tbroken\t${ledger.broken_count}`);
+  console.log(`root_hash\t${ledger.root_hash}`);
+  console.log(`public_root_hash\t${ledger.public_root_hash}`);
+  console.log(`hash_chain_complete\t${ledger.integrity.hash_chain_complete}`);
+  console.log(`explore\t${ledger.integrity.explorer}`);
+  if (ledger.tip) {
+    console.log(
+      `tip\tseq=${ledger.tip.sequence}\thash=${ledger.tip.entry_hash}\ttype=${ledger.tip.type}\tmrg=${ledger.tip.amount_mrg}`
+    );
+    if (ledger.tip.scan_tx) {
+      console.log(`tip.scan\t${ledger.tip.scan_tx}`);
+    }
+  }
+  if (ledger.sample_entries && ledger.sample_entries.length) {
+    console.log("# sample entries");
+    for (const e of ledger.sample_entries.slice(0, 8)) {
+      console.log(`${e.sequence}\t${e.type}\t${e.amount_mrg} MRG\t${(e.entry_hash || "").slice(0, 16)}…`);
+    }
+  }
+}
+
+async function marketCommand(flags) {
+  if (flags.mock || flags.offline) {
+    const marketplace = discoverMarketplace(mockMarket(), { limit: Number(flags.limit || 25) });
+    if (flags.json) {
+      console.log(JSON.stringify(marketplace, null, 2));
+      return;
+    }
+    printMarket(marketplace, "mock");
+    return;
+  }
+  const settings = await loadSettings(flags.settings, settingsFromFlags(flags));
+  try {
+    const market = await getMarketplace(settings, Number(flags.limit || 40));
+    const marketplace = discoverMarketplace(market, { limit: Number(flags.limit || 25) });
+    if (flags.json) {
+      console.log(JSON.stringify(marketplace, null, 2));
+      return;
+    }
+    printMarket(marketplace, "live");
+  } catch (error) {
+    if (flags.strict) throw error;
+    const marketplace = discoverMarketplace(mockMarket(), { limit: Number(flags.limit || 25) });
+    console.log(`# live unavailable: ${error.message}`);
+    printMarket(marketplace, "mock-fallback");
+  }
+}
+
+function printMarket(marketplace, source) {
+  console.log(`# Marketplace discovery (${source}) · ${marketplace.token_symbol}`);
+  console.log(
+    `projects\t${marketplace.stats.project_count}\topen_tasks\t${marketplace.stats.open_task_count}\twork_pool_cents\t${marketplace.stats.work_pool_cents}`
+  );
+  console.log("# open bounties (claimable MRG)");
+  console.log("id\treward\tkind\tstatus\ttitle");
+  for (const b of marketplace.open_bounties) {
+    console.log(`${b.id}\t${b.reward_mrg} MRG\t${b.worker_kind}\t${b.status}\t${b.title}`);
+  }
+  if (marketplace.funded_projects.length) {
+    console.log("# funded projects");
+    for (const p of marketplace.funded_projects.slice(0, 10)) {
+      console.log(`${p.id}\t${p.status}\t${p.budget_cents}\t${p.repo || ""}\t${p.title}`);
+    }
+  }
+  console.log(`explore\t${marketplace.explore.scan}`);
+}
+
+async function splitCommand(flags) {
+  const { discovery, source } = await loadChainBundle(flags);
+  const split = discovery.work_split;
+  if (flags.json) {
+    console.log(JSON.stringify({ source, work_split: split }, null, 2));
+    return;
+  }
+  if (discovery.warning) {
+    console.log(`# ${discovery.warning}`);
+  }
+  console.log(`# Work split (${source}) · packs=${split.pack_count} · block=${split.claim_block.block_id || "—"}`);
+  console.log(
+    `claim_block_ready\t${split.claim_block.ready}\tmrg_eligible\t${split.claim_block.mrg_eligible}\ttip\t${(split.ledger_tip_hash || "").slice(0, 16)}…`
+  );
+  console.log("pack_id\tstatus\treward\ttask\tjob\treview\taudit\ttitle");
+  for (const p of split.packs) {
+    console.log(
+      [
+        p.pack_id,
+        p.status,
+        `${p.reward_mrg} MRG`,
+        p.task_id,
+        p.assignment.job || "—",
+        p.assignment.review || "—",
+        p.assignment.audit || "—",
+        p.title
+      ].join("\t")
+    );
+  }
+}
+
+async function chainCommand(flags) {
+  const { discovery, source } = await loadChainBundle(flags);
+  if (flags.json) {
+    console.log(JSON.stringify({ source, ...discovery }, null, 2));
+    return;
+  }
+  if (discovery.warning) {
+    console.log(`# ${discovery.warning}`);
+  }
+  console.log(`# Chain discovery (${source})`);
+  console.log(
+    `token\t${discovery.token.token_symbol}\tminted\t${discovery.token.totals.minted_cents}\treserve\t${discovery.token.totals.remaining_reserve_cents}`
+  );
+  console.log(
+    `ledger\tvalid=${discovery.ledger.valid}\tentries=${discovery.ledger.entry_count}\tverified=${discovery.ledger.verified_count}\troot=${(discovery.ledger.root_hash || "").slice(0, 16)}…`
+  );
+  console.log(
+    `fleet\tonline=${discovery.fleet.online_nodes}/${discovery.fleet.total_nodes}\tblock_ready=${discovery.fleet.claim_block_ready}`
+  );
+  console.log(
+    `market\tprojects=${discovery.marketplace.stats.project_count}\topen=${discovery.marketplace.stats.open_task_count}\tpacks=${discovery.work_split.pack_count}`
+  );
+  console.log(`scan\t${discovery.explore.scan}`);
+  console.log(`proof\t${discovery.explore.ledger_proof}`);
+  console.log(`marketplace_api\t${discovery.explore.marketplace}`);
+}
+
+async function intentCommand(flags) {
+  const taskId = flags._[0] || flags.taskId || "";
+  const { discovery, source, settings } = await loadChainBundle(flags);
+  let task = discovery.marketplace.open_bounties[0] || { id: taskId, title: taskId, reward_mrg: 0 };
+  if (taskId) {
+    const hit = discovery.marketplace.open_bounties.find((b) => b.id === taskId);
+    if (hit) {
+      task = hit;
+    } else if (!flags.mock && settings) {
+      try {
+        task = await findTask(settings, taskId);
+      } catch {
+        task = { id: taskId, title: taskId, reward_mrg: 0 };
+      }
+    } else {
+      task = { id: taskId, title: taskId, reward_mrg: 0 };
+    }
+  }
+  const workerId =
+    flags.workerId ||
+    (settings && settings.worker && settings.worker.id) ||
+    "mrgminner:local";
+  const fleet = {
+    claim_block: discovery.fleet.claim_block,
+    nodes: [],
+    stats: discovery.fleet
+  };
+  const fullIntent = buildClaimIntent({
+    task,
+    fleet,
+    proof: discovery.ledger,
+    workerId,
+    prUrl: flags.prUrl || ""
+  });
+
+  if (flags.json) {
+    console.log(JSON.stringify({ source, claim_intent: fullIntent }, null, 2));
+    return;
+  }
+  console.log(`# Claim intent (${source}) · ready=${fullIntent.ready} · mrg_eligible=${fullIntent.mrg_eligible}`);
+  console.log(`intent_id\t${fullIntent.intent_id}`);
+  console.log(`intent_hash\t${fullIntent.intent_hash}`);
+  console.log(`task_id\t${fullIntent.task_id}\treward\t${fullIntent.reward_mrg} MRG`);
+  console.log(`worker_id\t${fullIntent.worker_id}`);
+  console.log(`claim_block_id\t${fullIntent.claim_block_id || "—"}`);
+  console.log(`ledger_tip_hash\t${fullIntent.ledger_tip_hash || "—"}`);
+  console.log(`hash_complete\t${fullIntent.hash_binding.complete}`);
+  if (fullIntent.commands.claim) {
+    console.log(`cmd.claim\t${fullIntent.commands.claim}`);
+  }
+  if (fullIntent.commands.explore) {
+    console.log(`explore\t${fullIntent.commands.explore}`);
+  }
+  console.log(`# ${fullIntent.notice}`);
+}
+
 function help() {
-  console.log(`MRGMinner (MergeIDE)
+  console.log(`MRGMinner — MergeOS task runner + MRG chain discovery
 
 Usage:
-  mrgminner configure --mergeos-url http://localhost:8080 --provider claude --worker-id github:you
-  mrgminner login --email admin@gmail.com --password Admin123
+  mrgminner configure --mergeos-url https://mergeos.shop --provider claude --worker-id github:you
+  mrgminner login --email you@example.com --password secret
   mrgminner tasks --open
   mrgminner prompt <task-id>
   mrgminner run <task-id> [--claim] [--submit --pr-url <url>]
@@ -493,19 +824,27 @@ Usage:
   mrgminner submit <task-id> --pr-url <url> [--evidence-url <url>] [--notes <text>]
   mrgminner next [--kind agent] [--claim] [--submit --pr-url <url>]
 
-  # Online agent nodes + MRG claim-block cluster
+  # Agent nodes + claim-block cluster
   mrgminner nodes [--online] [--role job|review|audit] [--json] [--mock]
   mrgminner stats [--json] [--mock]
-  mrgminner block [--json] [--mock] [--task-id <id>] [--project-id <id>]
+  mrgminner block [--json] [--mock]
 
-Claim-block: online job worker + review node + audit node with verified ledger entry_hash
-form a cluster that is mrg_eligible for coordinated claim/review/audit.
+  # Blockchain discovery (public APIs — no login for most)
+  mrgminner token [--json] [--mock]          # MRG token economy
+  mrgminner proof [--json] [--mock]          # ledger hash-chain proof
+  mrgminner market [--json] [--mock]         # open bounties / funded projects
+  mrgminner split [--json] [--mock]          # split work across job/review/audit
+  mrgminner chain [--json] [--mock]          # full discovery bundle
+  mrgminner intent [task-id] [--json] [--mock]  # claim intent bound to ledger tip
+
+Claim-block: online job + review + audit nodes + verified entry_hash → mrg_eligible cluster.
+Work split packs bind each bounty to that block and ledger tip for discoverable MRG claims.
+Payout release always stays with MergeOS owner/admin accept.
 
 AI CLI placeholders:
-  {{prompt}}     Full task prompt
-  {{promptFile}} Prompt markdown path
-  {{taskFile}}   Task JSON path
-  {{taskId}}     MergeOS task id
+  {{prompt}}  {{promptFile}}  {{taskFile}}  {{taskId}}
+
+Explore: https://scan.mergeos.shop  ·  https://mergeos.shop
 `);
 }
 

@@ -90,6 +90,26 @@ async function getPublicLedger(settings, limit = 20) {
   }
 }
 
+async function getTokenEconomy(settings) {
+  return publicGet(settings, "/api/public/token-economy");
+}
+
+async function getLedgerProof(settings) {
+  return publicGet(settings, "/api/public/ledger/proof");
+}
+
+async function getMarketplace(settings, limit = 40) {
+  return publicGet(settings, `/api/public/marketplace?limit=${encodeURIComponent(limit)}`);
+}
+
+async function getPublicConfig(settings) {
+  try {
+    return await publicGet(settings, "/api/config");
+  } catch {
+    return null;
+  }
+}
+
 async function findTask(settings, taskID) {
   const tasks = await listTasks(settings);
   const ref = String(taskID || "").trim();
@@ -213,8 +233,12 @@ module.exports = {
   agentActionPayload,
   claimTask,
   findTask,
+  getLedgerProof,
   getLiveFeed,
+  getMarketplace,
+  getPublicConfig,
   getPublicLedger,
+  getTokenEconomy,
   listProtocolAgents,
   listTasks,
   login,
