@@ -215,6 +215,19 @@ function normalizeProvider(value) {
   return PROVIDER_PRESETS[provider] ? provider : "custom";
 }
 
+function redactToken(value) {
+  const token = String(value === undefined || value === null ? "" : value).trim();
+  if (!token) {
+    return "(not set)";
+  }
+  const bare = token.startsWith("Bearer ") ? token.slice("Bearer ".length).trim() : token;
+  if (bare.length <= 4) {
+    return "****";
+  }
+  const tail = bare.slice(-4);
+  return `****${tail}`;
+}
+
 function providerPreset(provider) {
   return PROVIDER_PRESETS[normalizeProvider(provider)];
 }
@@ -230,6 +243,7 @@ module.exports = {
   parseArgList,
   providerPreset,
   readSettingsFile,
+  redactToken,
   saveSettings,
   settingsPath,
   splitShellLike

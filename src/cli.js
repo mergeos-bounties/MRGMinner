@@ -18,7 +18,7 @@ const {
   recordAgentAction,
   submitTaskEvidence
 } = require("./api");
-const { loadSettings, mergeSettings, parseArgList, readSettingsFile, saveSettings, settingsPath } = require("./settings");
+const { loadSettings, mergeSettings, parseArgList, readSettingsFile, redactToken, saveSettings, settingsPath } = require("./settings");
 const { prepareTaskArtifacts, resolveAIInvocation, runAIForTask } = require("./runner");
 const { buildFleetReport, mockFleetPayload } = require("./nodes");
 const {
@@ -1177,8 +1177,10 @@ async function statusCommand(flags) {
       open_bounties_listed: discovery.marketplace.open_bounties.length,
       discoverable_open_mrg: discovery.marketplace.stats.discoverable_open_mrg,
       solana_program_id: discovery.solana.program_id,
+      mergeos_url: "http://localhost:8080",
       worker_id: "mrgminner:mock",
-      provider: "mock"
+      provider: "mock",
+      token: redactToken("mock-token-abcd1234")
     };
     if (flags.json) {
       console.log(JSON.stringify(status, null, 2));
@@ -1208,7 +1210,8 @@ async function statusCommand(flags) {
     agent_type: settings.worker && settings.worker.agentType,
     provider: settings.ai && settings.ai.provider,
     mergeos_url: settings.mergeos && settings.mergeos.baseUrl,
-    has_token: Boolean(settings.mergeos && settings.mergeos.token)
+    has_token: Boolean(settings.mergeos && settings.mergeos.token),
+    token: redactToken(settings.mergeos && settings.mergeos.token)
   };
   if (flags.json) {
     console.log(JSON.stringify(status, null, 2));
