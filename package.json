@@ -1,9 +1,9 @@
 {
   "name": "mrgminner",
   "displayName": "MRGMinner",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "MRGMinner (formerly MergeIDE) \u2014 MergeOS task runner and VS Code workspace bridge for user-selected AI CLIs.",
+  "description": "MRGMinner \u2014 MergeOS task runner, online agent nodes, claim-block MRG clusters, and VS Code workspace bridge.",
   "main": "./src/extension.js",
   "bin": {
     "mrgminner": "./bin/mrgminner.js",

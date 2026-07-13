@@ -19,6 +19,8 @@ Extracted from the [mergeos](https://github.com/mergeos-bounties/mergeos) monore
 | Capability | Description |
 | --- | --- |
 | **CLI** | `mrgminner` / `mergeide` (alias) — tasks, claim, run, submit |
+| **Online nodes** | `mrgminner nodes` / `stats` — agent fleet from public protocol + live feed |
+| **Claim-block MRG** | `mrgminner block` — job + review + audit nodes with verified ledger `entry_hash` |
 | **AI presets** | Codex, Claude, or custom CLI with prompt placeholders |
 | **VS Code extension** | Same package loads as an extension (MRGMinner command palette titles) |
 | **Windows exe** | GitHub Actions packages `MRGMinner-Windows-x64.exe` |
@@ -58,6 +60,38 @@ node .\bin\mrgminner.js submit prj_public_0001:12 `
 ```
 
 MergeOS records payout only when an owner/admin accepts the task. MRGMinner never uses that route.
+
+---
+
+## Online nodes & claim-block MRG
+
+MRGMinner reads the public MergeOS agent protocol and live feed (no login required for listing):
+
+```powershell
+# List agent nodes (job / review / audit) and online flag
+node .\bin\mrgminner.js nodes
+node .\bin\mrgminner.js nodes --online --role job
+
+# Fleet statistics
+node .\bin\mrgminner.js stats
+
+# Form a claim-block cluster when job + review + audit are online
+# and recent ledger items carry verified entry_hash
+node .\bin\mrgminner.js block
+node .\bin\mrgminner.js block --json
+
+# Offline demo fleet (no network)
+node .\bin\mrgminner.js nodes --mock
+node .\bin\mrgminner.js block --mock
+```
+
+| Role | Typical agent types | Role in block |
+| --- | --- | --- |
+| **job** | coding / frontend / backend / deploy | Implements the task |
+| **review** | review / QA / design-review | Scores evidence / PR |
+| **audit** | repo-scan / security | Checks hash-ready ledger proof |
+
+A **claim-block** is `mrg_eligible` only when all three roles are **online** and at least one **verified** ledger `entry_hash` is present (full hash chain tip). That cluster is the recommended unit for coordinated claim → implement → review → audit before owner/admin accept.
 
 ---
 

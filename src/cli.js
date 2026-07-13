@@ -1,9 +1,20 @@
 "use strict";
 
 const path = require("node:path");
-const { claimTask, findTask, listTasks, login, recordAgentAction, submitTaskEvidence } = require("./api");
+const {
+  claimTask,
+  findTask,
+  getLiveFeed,
+  getPublicLedger,
+  listProtocolAgents,
+  listTasks,
+  login,
+  recordAgentAction,
+  submitTaskEvidence
+} = require("./api");
 const { loadSettings, mergeSettings, parseArgList, readSettingsFile, saveSettings, settingsPath } = require("./settings");
 const { prepareTaskArtifacts, runAIForTask } = require("./runner");
+const { buildFleetReport, mockFleetPayload } = require("./nodes");
 
 async function main(argv) {
   const [command = "help", ...rest] = argv;
@@ -25,6 +36,13 @@ async function main(argv) {
       return submitCommand(flags);
     case "next":
       return nextCommand(flags);
+    case "nodes":
+      return nodesCommand(flags);
+    case "stats":
+      return statsCommand(flags);
+    case "block":
+    case "claim-block":
+      return blockCommand(flags);
     case "help":
     case "--help":
     case "-h":
@@ -323,6 +341,145 @@ function toCamel(value) {
   return value.replace(/-([a-z])/g, (_, char) => char.toUpperCase());
 }
 
+async function loadFleet(flags) {
+  if (flags.mock || flags.offline) {
+    return { report: mockFleetPayload(), source: "mock" };
+  }
+  const settings = await loadSettings(flags.settings, settingsFromFlags(flags));
+  try {
+    const [agents, feed, ledger] = await Promise.all([
+      listProtocolAgents(settings, Number(flags.limit || 50)),
+      getLiveFeed(settings, Number(flags.feedLimit || 40)),
+      getPublicLedger(settings, Number(flags.ledgerLimit || 20))
+    ]);
+    const report = buildFleetReport({
+      agents,
+      feed,
+      ledgerItems: ledger.length ? ledger : feed.items || [],
+      options: {
+        taskId: flags.taskId || flags._[0] || "",
+        projectId: flags.projectId || ""
+      }
+    });
+    return { report, source: "live", settings };
+  } catch (error) {
+    if (flags.strict) {
+      throw error;
+    }
+    const report = mockFleetPayload();
+    report.warning = `live fleet unavailable (${error.message}); showing mock fleet`;
+    return { report, source: "mock-fallback" };
+  }
+}
+
+async function nodesCommand(flags) {
+  const { report, source } = await loadFleet(flags);
+  if (flags.json) {
+    console.log(JSON.stringify({ source, ...report }, null, 2));
+    return;
+  }
+  if (report.warning) {
+    console.log(`# ${report.warning}`);
+  }
+  console.log(`# MRGMinner nodes (${source}) · online ${report.stats.online_nodes}/${report.stats.total_nodes}`);
+  console.log(
+    `# roles online job=${report.stats.online_by_role.job} review=${report.stats.online_by_role.review} audit=${report.stats.online_by_role.audit} · claim_block_ready=${report.stats.claim_block_ready}`
+  );
+  console.log("id\tonline\trole\tstatus\topen\tqueue\ttype\ttitle");
+  for (const node of report.nodes) {
+    if (flags.online && !node.online) {
+      continue;
+    }
+    if (flags.role && node.role !== flags.role) {
+      continue;
+    }
+    console.log(
+      [
+        node.id,
+        node.online ? "yes" : "no",
+        node.role,
+        node.status,
+        node.open_task_count,
+        node.queue_depth,
+        node.type,
+        node.title
+      ].join("\t")
+    );
+  }
+}
+
+async function statsCommand(flags) {
+  const { report, source } = await loadFleet(flags);
+  if (flags.json) {
+    console.log(JSON.stringify({ source, stats: report.stats, claim_block: report.claim_block }, null, 2));
+    return;
+  }
+  if (report.warning) {
+    console.log(`# ${report.warning}`);
+  }
+  const s = report.stats;
+  console.log(`# MRGMinner node stats (${source})`);
+  console.log(`total_nodes\t${s.total_nodes}`);
+  console.log(`online_nodes\t${s.online_nodes}`);
+  console.log(`offline_nodes\t${s.offline_nodes}`);
+  console.log(`job_nodes\t${s.by_role.job}\tonline\t${s.online_by_role.job}`);
+  console.log(`review_nodes\t${s.by_role.review}\tonline\t${s.online_by_role.review}`);
+  console.log(`audit_nodes\t${s.by_role.audit}\tonline\t${s.online_by_role.audit}`);
+  console.log(`open_tasks_on_nodes\t${s.open_tasks_on_nodes}`);
+  console.log(`queue_depth_total\t${s.queue_depth_total}`);
+  console.log(`verified_hash_count\t${s.verified_hash_count}`);
+  console.log(`ledger_entry_count\t${s.feed.ledger_entry_count}`);
+  console.log(`active_agents_feed\t${s.feed.active_agent_count}`);
+  console.log(`open_tasks_feed\t${s.feed.open_task_count}`);
+  console.log(`claim_block_ready\t${s.claim_block_ready}`);
+  console.log(`token\t${s.feed.token_symbol || "MRG"}`);
+}
+
+async function blockCommand(flags) {
+  const { report, source } = await loadFleet(flags);
+  const block = report.claim_block;
+  if (flags.json) {
+    console.log(JSON.stringify({ source, claim_block: block, stats: report.stats }, null, 2));
+    return;
+  }
+  if (report.warning) {
+    console.log(`# ${report.warning}`);
+  }
+  console.log(`# MRG claim-block (${source}) · status=${block.status} · ready=${block.ready}`);
+  if (block.block_id) {
+    console.log(`block_id\t${block.block_id}`);
+    console.log(`block_hash\t${block.block_hash}`);
+  }
+  console.log(`mrg_eligible\t${block.mrg_eligible}`);
+  if (block.missing && block.missing.length) {
+    console.log(`missing\t${block.missing.join(",")}`);
+  }
+  for (const role of ["job", "review", "audit"]) {
+    const member = block.members[role];
+    if (member) {
+      console.log(
+        `member.${role}\t${member.id}\t${member.status}\tonline=${member.online}\ttype=${member.type}`
+      );
+    } else {
+      console.log(`member.${role}\t—`);
+    }
+  }
+  if (block.ledger_tip) {
+    console.log(
+      `ledger_tip\tseq=${block.ledger_tip.sequence || "?"}\thash=${block.ledger_tip.entry_hash}\tstatus=${block.ledger_tip.status}`
+    );
+  }
+  console.log(
+    `hash_chain\tcomplete=${block.hash_chain.complete}\tverified_count=${block.hash_chain.verified_count}`
+  );
+  if (block.claim_guidance && block.claim_guidance.steps) {
+    console.log("# guidance");
+    for (const step of block.claim_guidance.steps) {
+      console.log(`- ${step}`);
+    }
+  }
+}
+
 function help() {
   console.log(`MRGMinner (MergeIDE)
 
@@ -335,6 +492,14 @@ Usage:
   mrgminner claim <task-id>
   mrgminner submit <task-id> --pr-url <url> [--evidence-url <url>] [--notes <text>]
   mrgminner next [--kind agent] [--claim] [--submit --pr-url <url>]
+
+  # Online agent nodes + MRG claim-block cluster
+  mrgminner nodes [--online] [--role job|review|audit] [--json] [--mock]
+  mrgminner stats [--json] [--mock]
+  mrgminner block [--json] [--mock] [--task-id <id>] [--project-id <id>]
+
+Claim-block: online job worker + review node + audit node with verified ledger entry_hash
+form a cluster that is mrg_eligible for coordinated claim/review/audit.
 
 AI CLI placeholders:
   {{prompt}}     Full task prompt

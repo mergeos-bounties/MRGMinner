@@ -45,6 +45,51 @@ async function listTasks(settings) {
   return Array.isArray(tasks) ? tasks : [];
 }
 
+async function publicGet(settings, route) {
+  const baseUrl = normalizeBaseUrl(settings.mergeos && settings.mergeos.baseUrl);
+  const response = await fetch(`${baseUrl}${route}`, {
+    method: "GET",
+    headers: { Accept: "application/json" }
+  });
+  const text = await response.text();
+  const payload = text ? parseJson(text) : null;
+  if (!response.ok) {
+    const message = payload && payload.error ? payload.error : `${response.status} ${response.statusText}`;
+    throw new Error(`MergeOS GET ${route} failed: ${message}`);
+  }
+  return payload;
+}
+
+async function listProtocolAgents(settings, limit = 50) {
+  const payload = await publicGet(settings, `/api/public/protocol/agents?limit=${encodeURIComponent(limit)}`);
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  return Array.isArray(payload.agents) ? payload.agents : [];
+}
+
+async function getLiveFeed(settings, limit = 40) {
+  return publicGet(settings, `/api/public/live-feed?limit=${encodeURIComponent(limit)}`);
+}
+
+async function getPublicLedger(settings, limit = 20) {
+  try {
+    const payload = await publicGet(settings, `/api/public/ledger?limit=${encodeURIComponent(limit)}`);
+    if (Array.isArray(payload)) {
+      return payload;
+    }
+    if (Array.isArray(payload.entries)) {
+      return payload.entries;
+    }
+    if (Array.isArray(payload.items)) {
+      return payload.items;
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
 async function findTask(settings, taskID) {
   const tasks = await listTasks(settings);
   const ref = String(taskID || "").trim();
@@ -168,8 +213,12 @@ module.exports = {
   agentActionPayload,
   claimTask,
   findTask,
+  getLiveFeed,
+  getPublicLedger,
+  listProtocolAgents,
   listTasks,
   login,
+  publicGet,
   recordAgentAction,
   submissionPayload,
   submitTaskEvidence,
