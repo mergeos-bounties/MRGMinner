@@ -1,9 +1,11 @@
 "use strict";
 
+const fs = require("node:fs");
 const path = require("node:path");
 const { claimTask, findTask, listTasks, login, recordAgentAction, submitTaskEvidence } = require("./api");
 const { loadSettings, mergeSettings, parseArgList, readSettingsFile, saveSettings, settingsPath } = require("./settings");
 const { prepareTaskArtifacts, runAIForTask } = require("./runner");
+const { zipDirectory } = require("./pack");
 
 async function main(argv) {
   const [command = "help", ...rest] = argv;
@@ -25,6 +27,8 @@ async function main(argv) {
       return submitCommand(flags);
     case "next":
       return nextCommand(flags);
+    case "pack":
+      return packCommand(flags);
     case "help":
     case "--help":
     case "-h":
@@ -134,6 +138,22 @@ async function nextCommand(flags) {
   if (shouldSubmitAfterRun(flags)) {
     await submitAndRecord(settings, task, flags);
   }
+}
+
+async function packCommand(flags) {
+  const taskID = requiredPositional(flags, "task id");
+  const settings = await loadSettings(flags.settings, settingsFromFlags(flags));
+  const workspaceRoot = path.resolve(flags.workspace || settings.workspace && settings.workspace.root || process.cwd());
+  const artifactRoot = path.join(workspaceRoot, ".mergeide", "tasks", taskID);
+  const exists = await fs.promises.stat(artifactRoot).then(() => true).catch(() => false);
+  if (!exists) {
+    throw new Error(`No artifacts found for task ${taskID} at ${artifactRoot}`);
+  }
+  const outDir = flags.output || path.join(workspaceRoot, ".mergeide", "packages");
+  await fs.promises.mkdir(outDir, { recursive: true });
+  const outPath = path.join(outDir, `evidence-${taskID}.zip`);
+  await zipDirectory(artifactRoot, outPath);
+  console.log(`Packaged ${artifactRoot} → ${outPath}`);
 }
 
 function parseFlags(args) {
@@ -335,6 +355,7 @@ Usage:
   mrgminner claim <task-id>
   mrgminner submit <task-id> --pr-url <url> [--evidence-url <url>] [--notes <text>]
   mrgminner next [--kind agent] [--claim] [--submit --pr-url <url>]
+  mrgminner pack <task-id> [--output <dir>]
 
 AI CLI placeholders:
   {{prompt}}     Full task prompt
