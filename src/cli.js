@@ -41,8 +41,7 @@ const {
   summarizeTokenEconomy,
   verifyHashChain
 } = require("./chain");
-const { startShare, earningsReport, DEFAULT_MRG_PER_GB } = require("./share");
-const { startIDE } = require("./ide");
+const { zipDirectory } = require("./pack");
 
 async function main(argv) {
   const [command = "help", ...rest] = argv;
@@ -101,16 +100,8 @@ async function main(argv) {
       return solanaCommand(flags);
     case "status":
       return statusCommand(flags);
-    case "ide":
-    case "serve":
-      return ideCommand(flags);
-    case "share":
-    case "bandwidth":
-      return shareCommand(flags);
-    case "version":
-    case "--version":
-    case "-V":
-      return versionCommand(flags);
+    case "pack":
+      return packCommand(flags);
     case "help":
     case "--help":
     case "-h":
@@ -601,6 +592,23 @@ async function dryRunNext(settings, task, flags) {
   console.log("");
   console.log("# --- prompt ---");
   console.log(artifacts.prompt);
+}
+
+async function packCommand(flags) {
+  const taskID = requiredPositional(flags, "task id");
+  const settings = await loadSettings(flags.settings, settingsFromFlags(flags));
+  const workspaceRoot = path.resolve(flags.workspace || settings.workspace && settings.workspace.root || process.cwd());
+  const artifactRoot = path.join(workspaceRoot, ".mergeide", "tasks", taskID);
+  const exists = await fs.promises.stat(artifactRoot).then(() => true).catch(() => false);
+  if (!exists) {
+    throw new Error(`No artifacts found for task ${taskID} at ${artifactRoot}`);
+  }
+  const outDir = flags.output || path.join(workspaceRoot, ".mergeide", "packages");
+  await fs.promises.mkdir(outDir, { recursive: true });
+  const outPath = path.join(outDir, `evidence-${taskID}.zip`);
+  await zipDirectory(artifactRoot, outPath);
+  console.log(`Packaged ${artifactRoot} → ${outPath}`);
+}
 }
 
 function parseFlags(args) {
@@ -1582,7 +1590,7 @@ async function statusCommand(flags) {
       mergeos_url: "http://localhost:8080",
       worker_id: "mrgminner:mock",
       provider: "mock",
-      token: redactToken("mock-token-abcd1234")
+      token: redactToken("mrgminner:mock-redacted")
     };
     if (flags.json) {
       console.log(JSON.stringify(status, null, 2));
@@ -1650,6 +1658,7 @@ Usage:
   mrgminner pack <task-id> [--pr-url <url>]              # zip task artifacts
   mrgminner compare [--presets codex,claude] [--kind agent]
   mrgminner next [--kind agent] [--dry-run] [--claim] [--submit --pr-url <url>]
+  mrgminner pack <task-id> [--output <dir>]
 
   # Agent nodes + claim-block cluster
   mrgminner nodes [--online] [--role job|review|audit] [--json] [--mock]
