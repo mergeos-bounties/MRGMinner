@@ -202,6 +202,14 @@ async function nextCommand(flags) {
     return dryRunNext(settings, task, flags);
   }
   console.log(`Selected ${task.id}: ${task.title}`);
+  if (flags.dryRun) {
+    const artifacts = await prepareTaskArtifacts(settings, task, {
+      workspaceRoot: flags.workspace
+    });
+    console.log(`\nPrompt file: ${artifacts.promptFile}`);
+    console.log(`Prompt:\n${artifacts.prompt}`);
+    return;
+  }
   const result = await runAIForTask(settings, task, {
     workspaceRoot: flags.workspace
   });
