@@ -19,7 +19,7 @@ const {
   submitTaskEvidence
 } = require("./api");
 const { loadSettings, mergeSettings, parseArgList, readSettingsFile, saveSettings, settingsPath } = require("./settings");
-const { prepareTaskArtifacts, runAIForTask } = require("./runner");
+const { prepareTaskArtifacts, resolveAIInvocation, runAIForTask } = require("./runner");
 const { buildFleetReport, mockFleetPayload } = require("./nodes");
 const {
   buildChainDiscovery,
@@ -56,6 +56,8 @@ async function main(argv) {
       return claimCommand(flags);
     case "submit":
       return submitCommand(flags);
+    case "compare":
+      return compareCommand(flags);
     case "next":
       return nextCommand(flags);
     case "nodes":
@@ -210,6 +212,86 @@ async function nextCommand(flags) {
   if (shouldSubmitAfterRun(flags)) {
     await submitAndRecord(settings, task, flags);
   }
+}
+
+async function compareCommand(flags) {
+  const settings = await loadSettings(flags.settings, settingsFromFlags(flags));
+  const tasks = await listTasks(settings);
+  const task = selectNextTask(tasks, flags);
+  if (!task) {
+    console.log("No open MergeOS task matched the current filters.");
+    return;
+  }
+  console.log(`Selected ${task.id}: ${task.title}`);
+  const presetsList = (flags.presets || "codex,claude").split(",").map((s) => s.trim()).filter(Boolean);
+  const artifacts = await prepareTaskArtifacts(settings, task, {
+    workspaceRoot: flags.workspace
+  });
+  const results = [];
+  for (const preset of presetsList) {
+    const presetSettings = mergeSettings(settings, {
+      ai: { provider: preset, command: "", args: [] }
+    });
+    let invocation;
+    try {
+      invocation = resolveAIInvocation(presetSettings, artifacts, task);
+    } catch (error) {
+      results.push({ provider: preset, error: error.message, command: "", args: [], commandLine: "" });
+      continue;
+    }
+    results.push({
+      provider: preset,
+      error: null,
+      command: invocation.command,
+      args: invocation.args,
+      commandLine: [invocation.command, ...invocation.args].join(" ")
+    });
+  }
+  const notes = buildCompareNotes(task, results, artifacts);
+  const notesFile = path.join(artifacts.artifactRoot, "compare-notes.md");
+  fs.writeFileSync(notesFile, notes, "utf8");
+  console.log(`Comparison notes written to ${notesFile}`);
+  console.log("");
+  console.log(notes);
+}
+
+function buildCompareNotes(task, results, artifacts) {
+  const lines = [
+    "# Multi-Provider Compare",
+    "",
+    `Task: ${task.id} — ${task.title}`,
+    `Reward: ${(Number(task.reward_cents || 0) / 100).toFixed(2)} MRG`,
+    `Prompt: ${artifacts.promptFile}`,
+    "",
+    "## Provider Comparison",
+    "",
+    "| # | Provider | Command |",
+    "|---|---|---|"
+  ];
+  for (let index = 0; index < results.length; index += 1) {
+    const r = results[index];
+    const num = index + 1;
+    if (r.error) {
+      lines.push(`| ${num} | ${r.provider} | _error: ${r.error}_ |`);
+    } else {
+      lines.push(`| ${num} | ${r.provider} | \`${r.commandLine}\` |`);
+    }
+  }
+  lines.push("", "### Details", "");
+  for (const r of results) {
+    if (r.error) {
+      lines.push(`**${r.provider}**`, "", `- Error: ${r.error}`, "");
+    } else {
+      lines.push(
+        `**${r.provider}**`,
+        "",
+        `- Command: \`${r.command}\``,
+        `- Args: \`${JSON.stringify(r.args)}\``,
+        ""
+      );
+    }
+  }
+  return lines.join("\n");
 }
 
 function parseFlags(args) {
@@ -1157,6 +1239,7 @@ Usage:
   mrgminner run <task-id> [--claim] [--submit --pr-url <url>]
   mrgminner claim <task-id> [--with-intent]
   mrgminner submit <task-id> --pr-url <url> [--with-intent]
+  mrgminner compare [--presets codex,claude] [--kind agent]
   mrgminner next [--kind agent] [--claim] [--submit --pr-url <url>]
 
   # Agent nodes + claim-block cluster
@@ -1186,6 +1269,8 @@ Explore: https://scan.mergeos.shop  ·  https://mergeos.shop
 }
 
 module.exports = {
+  buildCompareNotes,
+  compareCommand,
   main,
   parseFlags,
   selectNextTask,
