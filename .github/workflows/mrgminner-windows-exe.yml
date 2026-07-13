@@ -116,7 +116,7 @@ jobs:
           "MERGEIDE_SHA256=$hash" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Smoke Windows executable
-                shell: pwsh
+        shell: pwsh
         run: .\dist\MRGMinner-Windows-x64.exe --help
 
       - name: Upload workflow artifact
