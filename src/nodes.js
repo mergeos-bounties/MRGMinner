@@ -29,11 +29,12 @@ function classifyAgentRole(agent) {
   const hay = [type, role, ...focus, ...caps, ...actions, ...tags].join(" ");
 
   // Prefer explicit agent type names before capability soup
-  if (/review-agent|qa-agent|design-review|pr-review|code-review-agent/.test(type)) {
-    return ROLE_REVIEW;
-  }
-  if (/repo-scan|security-review|audit|scan-agent|risk-agent/.test(type)) {
+  // (security-review-agent must not match review-agent)
+  if (/repo-scan|security-review|audit-agent|scan-agent|risk-agent/.test(type)) {
     return ROLE_AUDIT;
+  }
+  if (/(^|[_-])(review-agent|qa-agent|design-review|pr-review|code-review)/.test(type) || type === "review-agent") {
+    return ROLE_REVIEW;
   }
   if (/coding-agent|frontend-agent|backend-agent|deploy|implementation|job-agent/.test(type)) {
     return ROLE_JOB;
