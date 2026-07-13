@@ -6,7 +6,7 @@ const path = require("node:path");
 
 const DEFAULT_SETTINGS = Object.freeze({
   brand: {
-    name: "MergeIDE",
+    name: "MRGMinner",
     upstream: "Code OSS / Visual Studio Code workflow"
   },
   mergeos: {

@@ -12,9 +12,9 @@ function buildTaskPrompt(task, options = {}) {
   const workspaceRoot = value(options.workspaceRoot, "the current repository");
 
   return [
-    "# MergeIDE Task",
+    "# MRGMinner Task",
     "",
-    "You are running inside MergeIDE, a Visual Studio Code style workspace connected to MergeOS.",
+    "You are running inside MRGMinner, a Visual Studio Code style workspace connected to MergeOS.",
     `Workspace: ${workspaceRoot}`,
     "",
     "Complete the MergeOS task below, verify your work, and create one git commit that can be submitted for review.",
@@ -34,7 +34,7 @@ function buildTaskPrompt(task, options = {}) {
     "1. Inspect the repository before editing.",
     "2. Keep changes scoped to this task.",
     "3. Run the most relevant tests or verification commands available in the repo.",
-    `4. Commit the finished work with a message that starts with \"MergeIDE ${taskID}:\".`,
+    `4. Commit the finished work with a message that starts with \"MRGMinner ${taskID}:\".`,
     "5. Submit pull request or evidence URL back to MergeOS for customer/admin review.",
     "6. Do not release payout yourself; payout is released only after review.",
     "",
