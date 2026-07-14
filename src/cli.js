@@ -1670,8 +1670,7 @@ function help() {
 Usage:
   mrgminner version [--json]
   mrgminner configure --mergeos-url https://mergeos.shop --provider claude --worker-id github:you
-  mrgminner login --email you@example.com --password secret
-  mrgminner ide [--host 127.0.0.1] [--port 17331] [--workspace .] [--no-open]
+  mrgminner login --email you@example.com --password [your-password]
   mrgminner status [--json] [--mock]
   mrgminner demo | live                             # full live smoke (public APIs)
   mrgminner tasks --open
