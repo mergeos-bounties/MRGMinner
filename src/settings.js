@@ -34,11 +34,15 @@ const DEFAULT_SETTINGS = Object.freeze({
 const PROVIDER_PRESETS = Object.freeze({
   codex: {
     command: "codex",
-    args: ["exec", "{{prompt}}"]
+    args: ["exec", "--skip-git-repo-check", "--sandbox", "workspace-write", "-", "{{promptStdin}}"]
   },
   claude: {
     command: "claude",
-    args: ["-p", "{{prompt}}"]
+    args: ["-p", "--output-format", "text", "{{promptStdin}}"]
+  },
+  grok: {
+    command: "grok",
+    args: ["--no-alt-screen", "--minimal", "--permission-mode", "auto", "--prompt-file", "{{promptFile}}"]
   },
   custom: {
     command: "",
@@ -94,7 +98,7 @@ async function loadSettings(filePath = settingsPath(), overrides = {}) {
 async function readSettingsFile(filePath = settingsPath()) {
   try {
     const raw = await fs.readFile(filePath, "utf8");
-    return JSON.parse(raw);
+    return JSON.parse(raw.replace(/^\uFEFF/, ""));
   } catch (error) {
     if (error && error.code === "ENOENT") {
       return {};

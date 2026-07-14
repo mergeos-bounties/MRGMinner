@@ -4,9 +4,10 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { mergeSettings, parseArgList, providerPreset, splitShellLike } = require("../src/settings");
 
-test("provider presets include codex and claude commands", () => {
+test("provider presets include codex, claude, and grok commands", () => {
   assert.equal(providerPreset("codex").command, "codex");
-  assert.deepEqual(providerPreset("claude").args, ["-p", "{{prompt}}"]);
+  assert.deepEqual(providerPreset("claude").args, ["-p", "--output-format", "text", "{{promptStdin}}"]);
+  assert.equal(providerPreset("grok").command, "grok");
 });
 
 test("mergeSettings normalizes base url and provider", () => {

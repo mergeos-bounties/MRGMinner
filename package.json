@@ -3,18 +3,25 @@
   "displayName": "MRGMinner",
   "version": "0.5.1",
   "private": true,
+  "author": "MergeOS / ThanhTrucSolutions",
   "description": "MRGMinner — MergeOS miner: MRG chain, claim packs, Solana anchors, and bandwidth-share stream (residential exits for TrucVPN).",
   "main": "./src/extension.js",
   "bin": {
     "mrgminner": "./bin/mrgminner.js",
-    "mergeide": "./bin/mrgminner.js"
+    "mergeide": "./bin/mergeide.js"
   },
   "scripts": {
     "start": "node ./bin/mrgminner.js",
+    "ide": "node ./bin/mergeide.js ide",
+    "electron": "electron ./src/electron-main.js",
+    "electron:smoke": "electron ./src/electron-main.js --smoke-test --workspace .",
     "tasks": "node ./bin/mrgminner.js tasks",
     "test": "node --test",
     "build:exe": "pkg . --targets node22-win-x64 --compress GZip --output dist/MRGMinner-Windows-x64.exe",
-    "build:portable": "npm run build:exe && node scripts/package-portable.js"
+    "build:portable": "npm run build:exe && node scripts/package-portable.js",
+    "build:electron": "electron-builder --publish never",
+    "build:electron:win": "electron-builder --win portable --x64 --publish never",
+    "build:electron:linux": "electron-builder --linux AppImage tar.gz --x64 --publish never"
   },
   "keywords": [
     "mergeos",
@@ -121,7 +128,58 @@
       }
     }
   },
+  "build": {
+    "appId": "shop.mergeos.mrgminner",
+    "productName": "MRGMinner",
+    "asar": false,
+    "copyright": "Copyright (c) MergeOS / ThanhTrucSolutions",
+    "directories": {
+      "output": "dist/electron"
+    },
+    "files": [
+      "bin/**/*",
+      "src/**/*",
+      "docs/**/*",
+      "README.md",
+      "LICENSE",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "src/electron-main.js"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "${productName}-${version}-windows-${arch}-portable.${ext}"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "tar.gz",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Development",
+      "artifactName": "${productName}-${version}-linux-${arch}.${ext}"
+    }
+  },
   "devDependencies": {
-    "@yao-pkg/pkg": "^6.20.0"
+    "@yao-pkg/pkg": "^6.20.0",
+    "electron": "^43.1.0",
+    "electron-builder": "^26.15.3"
   }
 }

@@ -63,6 +63,18 @@ test("marketplace discovery lists open bounties with correct title MRG", () => {
   assert.equal(market.stats.discoverable_open_mrg, 75);
 });
 
+test("marketplace discovery exposes in-progress projects", () => {
+  const market = discoverMarketplace({
+    projects: [
+      { id: "prj_active", title: "Active", status: "in_progress", budget_cents: 1000, open_task_count: 2 }
+    ],
+    bounties: []
+  });
+
+  assert.equal(market.active_projects.length, 1);
+  assert.equal(market.active_projects[0].id, "prj_active");
+});
+
 test("work split packs bind claim-block and ledger tip", () => {
   const market = discoverMarketplace(mockMarket());
   const fleet = mockFleetPayload();

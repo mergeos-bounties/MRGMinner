@@ -32,3 +32,21 @@ test("resolveAIInvocation uses configured custom command and args", () => {
   assert.equal(invocation.command, "my-ai");
   assert.deepEqual(invocation.args, ["run", "--task", "task.json", "tsk_99"]);
 });
+
+test("resolveAIInvocation sends prompt through stdin marker", () => {
+  const settings = mergeSettings({
+    ai: {
+      provider: "custom",
+      command: "my-ai",
+      args: ["exec", "-", "{{promptStdin}}"]
+    }
+  });
+  const invocation = resolveAIInvocation(settings, {
+    prompt: "hello from prompt",
+    promptFile: "prompt.md",
+    taskFile: "task.json"
+  }, { id: "tsk_100" });
+
+  assert.deepEqual(invocation.args, ["exec", "-"]);
+  assert.equal(invocation.stdin, "hello from prompt");
+});

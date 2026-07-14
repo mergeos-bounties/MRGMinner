@@ -51,6 +51,7 @@ test("next --dry-run prints task + prompt without invoking the AI CLI", async ()
       "--mergeos-url", "https://mergeos.shop",
       "--token", "unit-test-token",
       "--command", "definitely-not-a-real-ai-binary-should-never-run",
+      "--settings", path.join(workspaceRoot, "settings.json"),
       "--workspace", workspaceRoot
     ]);
   } finally {
@@ -103,6 +104,7 @@ test("next --dry-run --json emits a structured payload without running the CLI",
       "--mergeos-url", "https://mergeos.shop",
       "--token", "unit-test-token",
       "--provider", "claude",
+      "--settings", path.join(workspaceRoot, "settings.json"),
       "--workspace", workspaceRoot
     ]);
   } finally {
@@ -116,6 +118,7 @@ test("next --dry-run --json emits a structured payload without running the CLI",
   assert.equal(parsed.selected.id, "prj_public_0001:9");
   assert.equal(parsed.selected.title, "Wire status bar");
   assert.equal(parsed.ai_command, "claude");
-  assert.deepEqual(parsed.ai_args, ["-p", parsed.prompt]);
+  assert.deepEqual(parsed.ai_args, ["-p", "--output-format", "text"]);
+  assert.equal(parsed.ai_stdin, true);
   assert.match(parsed.prompt, /# MRGMinner Task/);
 });

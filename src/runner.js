@@ -23,7 +23,8 @@ async function prepareTaskArtifacts(settings, task, options = {}) {
   const prompt = buildTaskPrompt(task, {
     tokenSymbol: options.tokenSymbol,
     agentType: settings.worker && settings.worker.agentType,
-    workspaceRoot
+    workspaceRoot,
+    sandbox: options.sandbox
   });
   await fs.writeFile(taskFile, `${JSON.stringify(task, null, 2)}\n`, "utf8");
   await fs.writeFile(promptFile, `${prompt}\n`, "utf8");
@@ -57,8 +58,17 @@ function resolveAIInvocation(settings, artifacts, task) {
     "{{taskFile}}": artifacts.taskFile,
     "{{taskId}}": task.id
   };
-  const args = rawArgs.map((arg) => renderTemplate(String(arg), replacements));
-  return { command, args };
+  let stdin = "";
+  const args = [];
+  for (const rawArg of rawArgs) {
+    const arg = String(rawArg);
+    if (arg === "{{promptStdin}}") {
+      stdin = artifacts.prompt;
+      continue;
+    }
+    args.push(renderTemplate(arg, replacements));
+  }
+  return { command, args, stdin };
 }
 
 function renderTemplate(input, replacements) {
@@ -75,7 +85,8 @@ async function runAIForTask(settings, task, options = {}) {
   return spawnAI(invocation.command, invocation.args, {
     cwd: artifacts.workspaceRoot,
     env: process.env,
-    stdio: "inherit"
+    stdin: invocation.stdin,
+    stdio: invocation.stdin ? ["pipe", "inherit", "inherit"] : "inherit"
   });
 }
 
@@ -85,8 +96,11 @@ function spawnAI(command, args, options) {
       cwd: options.cwd,
       env: options.env,
       stdio: options.stdio || "inherit",
-      shell: false
+      shell: process.platform === "win32"
     });
+    if (options.stdin && child.stdin) {
+      child.stdin.end(options.stdin);
+    }
     child.on("error", reject);
     child.on("exit", (code, signal) => {
       resolve({

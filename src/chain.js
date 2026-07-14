@@ -353,6 +353,23 @@ function discoverMarketplace(market = {}, options = {}) {
       open_tasks: p.open_task_count || p.task_count || null
     }));
 
+  const activeProjects = projects
+    .filter((p) => {
+      const st = String(p.status || "").toLowerCase().replace(/[\s-]+/g, "_");
+      return ["in_progress", "active", "running", "claimed", "assigned"].includes(st);
+    })
+    .slice(0, limit)
+    .map((p) => ({
+      id: p.id,
+      title: p.title,
+      status: p.status,
+      budget_cents: p.budget_cents || 0,
+      budget_mrg: mrgFromCents(p.budget_cents || 0),
+      work_pool_cents: p.work_pool_cents || 0,
+      repo: p.repo_url || p.bounty_repo_name || p.source_repo_url || "",
+      open_tasks: p.open_task_count || p.task_count || null
+    }));
+
   const totalOpenMrg = openBounties.reduce((sum, b) => sum + (b.reward_mrg || 0), 0);
 
   return {
@@ -370,6 +387,7 @@ function discoverMarketplace(market = {}, options = {}) {
     },
     open_bounties: openBounties,
     funded_projects: fundedProjects,
+    active_projects: activeProjects,
     contributor_count: contributors.length,
     agent_count: agents.length,
     explore: {

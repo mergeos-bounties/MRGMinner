@@ -23,6 +23,10 @@
 | **Claim intents** | `intent` + `claim --with-intent` â€” `intent_hash` / `pack_hash` / `ledger_reference` |
 | **Solana anchors** | `solana` â€” program id, instruction map (`releasePayout`), bytes32 ledger reference |
 | **Local verify** | `verify` â€” walk `previous_hash` links client-side |
+| **IDE mode** | `mergeide ide` / `mrgminner ide` â€” local MergeIDE workspace for tasks, files, prompts, and guarded commands |
+| **Desktop app** | Electron app wraps the local IDE into a direct Windows/Linux desktop window |
+| **Docker sandbox** | IDE/Electron safe commands run through `docker run`; host AI receives Docker mount instructions for task verification |
+| **Work pools + AI test** | Funded and in-progress project groups filter tasks; AI CLI presets include Codex, Claude, Grok, and custom |
 | **Task runner** | `tasks` Â· `claim` Â· `run` Â· `submit` Â· `next` Â· `status` |
 | **Safety** | Never calls task **accept** / payout release |
 | **Bandwidth share** | `share start` â€” residential exit for [TrucVPN](https://github.com/mergeos-bounties/TrucVPN); earn **MRG** for relayed traffic |
@@ -66,7 +70,20 @@ See [docs/INSTALL.md](docs/INSTALL.md) for detailed install steps.
 cd MRGMinner
 npm ci
 npm test
-node .\bin\mrgminner.js --help\n\n# Full live smoke (public APIs, no login)\nnode .\bin\mrgminner.js demo
+node .\bin\mrgminner.js --help
+
+# Task execution in IDE/Electron requires Docker Desktop/Engine
+docker version
+
+# Local IDE (former MergeIDE workflow)
+node .\bin\mergeide.js ide --workspace .
+node .\bin\mrgminner.js ide --workspace . --port 17331
+
+# Desktop app (Electron)
+npm run electron -- --workspace .
+
+# Full live smoke (public APIs, no login)
+node .\bin\mrgminner.js demo
 
 # Public chain discovery (no login)
 node .\bin\mrgminner.js status
@@ -91,6 +108,28 @@ node .\bin\mrgminner.js claim <task-id> --with-intent
 ```
 
 Settings: `%USERPROFILE%\.mergeide\settings.json` (`MERGEIDE_SETTINGS` / `MRGMINNER_SETTINGS`).
+
+IDE and Electron safe commands are sandboxed by Docker. The app shows Docker engine, running container count, memory, and sandbox image in the sidebar. The AI CLI itself runs on the host machine, so install/login to Codex, Claude, Grok, or your custom CLI on Windows/Linux. The default Docker image is `node:22-bookworm-slim`; set `MRGMINNER_SANDBOX_IMAGE` or `MERGEIDE_SANDBOX_IMAGE` to change the task runtime image.
+
+Before auto-running tasks from the IDE, choose an AI CLI preset (`codex`, `claude`, `grok`, or `custom`), adjust command/args, then press **Test**. The test checks the host AI CLI and prepares the local Welcome prompt; it does not claim, submit, or run a funded task.
+
+The IDE also includes a local **Welcome AI runtime test** under `Local test tasks`. It asks the host AI to write `.mergeide/welcome-ai-result.json`; press **Check** to validate that the AI can edit the workspace that Docker mounts at `/workspace`.
+
+### Desktop IDE workflow
+
+![MRGMinner IDE workspace resume view](docs/mergeide-screenshot.png)
+
+1. Launch the desktop app with `npm run electron -- --workspace .` or run the packaged Windows/Linux app.
+2. Start with **Local test tasks** and run **Welcome AI runtime test**. Funded tasks are gated until this local host-AI + Docker workspace test passes.
+3. Pick a funded or in-progress work pool. The task list shows funded reward, status, and task id.
+4. Press **Run task**. The AI CLI runs on the host, while Docker remains the sandbox/runtime mounted at `/workspace`; the generated prompt tells the AI about that boundary.
+5. Watch the lower console. Grok/Codex/Claude stdout and stderr stream live into the console, ANSI color codes are stripped, and app log lines are forced onto clean newlines.
+6. Drag the thin handle above the console to resize it. The height is saved locally.
+7. Press **Stop** while a task is running to cancel the host AI process or Docker sandbox cleanly.
+8. Use the **Workspace** tab to resume old or half-finished local work. The list includes root `.mergeide/tasks/*` plus checked-out project task folders under `.mergeide/projects/<project>/.mergeide/tasks/*`; press **Resume** to continue that task.
+9. When a non-local task run exits `0`, MRGMinner stages code changes, excludes `.mergeide/`, creates a task branch, commits, pushes, creates a GitHub PR with `gh`, and adds a PR comment containing the task payload, changed files, diff stat, runner, prompt path, and host AI log path.
+
+Auto PR creation requires `git`, GitHub CLI (`gh auth status` must pass), and push permission to the task repository. If push or PR creation fails, the console logs the exact failing step and leaves the local branch/commit in the project checkout.
 
 ---
 
@@ -180,6 +219,7 @@ mrgminner submit <task-id> --pr-url https://github.com/org/repo/pull/1 --with-in
 
 | Command | Purpose |
 | --- | --- |
+| `ide` / `serve` | Launch the local MergeIDE workspace UI |
 | `configure` / `login` / `status` | Settings, auth, miner health |
 | `tasks` / `prompt` / `run` / `claim` / `submit` / `next` | Task lifecycle |
 | `nodes` / `stats` / `block` | Agent fleet + claim-block |
@@ -189,17 +229,43 @@ Common flags: `--json` Â· `--mock` Â· `--strict` Â· `--out <file.json>` Â
 
 ---
 
+## Desktop app
+
+MRGMinner also ships as an Electron desktop app. It starts the same local MergeIDE server internally and opens it in a native desktop window, so users can run the task IDE directly without opening a terminal browser URL.
+
+```powershell
+npm run electron -- --workspace .
+npm run build:electron:win      # Windows portable .exe
+npm run build:electron:linux    # Linux AppImage + tar.gz
+```
+
+GitHub Actions workflow `.github/workflows/mrgminner-electron-release.yml` builds and publishes:
+
+- `MRGMinner-<version>-windows-x64-portable.exe`
+- `MRGMinner-<version>-linux-x64.AppImage`
+- `MRGMinner-<version>-linux-x64.tar.gz`
+- `.sha256` checksums and build metadata
+
+Default release tag: `mrgminner-electron-latest`.
+
+The desktop IDE uses the same runtime boundary as `mrgminner ide`: safe terminal commands execute inside a Docker container with the workspace mounted at `/workspace` and MRGMinner mounted read-only at `/opt/mrgminner`; selected task runs and auto-next start the configured AI CLI on the host and include the Docker mount details in the generated prompt.
+
+---
+
 ## Repository layout
 
 ```text
 MRGMinner/
-  bin/mrgminner.js      # CLI entry
+  bin/mrgminner.js      # MRGMinner CLI entry
+  bin/mergeide.js       # MergeIDE-compatible CLI entry
   src/
     api.js              # MergeOS HTTP + public chain clients
     chain.js            # token / proof / market / split / intent / Solana
     nodes.js            # fleet roles + claim-block
     cli.js              # commands
+    electron-main.js    # Electron desktop app entry
     extension.js        # VS Code bridge
+    ide.js              # local browser IDE server
     runner.js / prompt.js / settings.js
   test/
   docs/

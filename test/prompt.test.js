@@ -3,6 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { buildTaskPrompt } = require("../src/prompt");
+const { welcomeAITask } = require("../src/welcome-task");
 
 test("buildTaskPrompt includes MergeOS task and commit workflow", () => {
   const prompt = buildTaskPrompt({
@@ -22,4 +23,12 @@ test("buildTaskPrompt includes MergeOS task and commit workflow", () => {
   assert.match(prompt, /mrgminner claim --with-intent/);
   assert.match(prompt, /mrgminner submit --pr-url/);
   assert.doesNotMatch(prompt, /claim the payout/);
+});
+
+test("buildTaskPrompt uses local workflow for the welcome AI task", () => {
+  const prompt = buildTaskPrompt(welcomeAITask(), { workspaceRoot: "C:/work/repo" });
+
+  assert.match(prompt, /local-only test task/);
+  assert.match(prompt, /Do not claim, submit, release payout, or create a git commit/);
+  assert.doesNotMatch(prompt, /MRGMinner local:welcome-ai:/);
 });

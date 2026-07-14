@@ -2,6 +2,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { spawn: spawnChild } = require("node:child_process");
 const {
   claimTask,
   findTask,
@@ -20,6 +21,7 @@ const {
 } = require("./api");
 const { loadSettings, mergeSettings, parseArgList, readSettingsFile, redactToken, saveSettings, settingsPath } = require("./settings");
 const { prepareTaskArtifacts, resolveAIInvocation, runAIForTask } = require("./runner");
+const { isWelcomeAITaskID, welcomeAITask } = require("./welcome-task");
 const { buildFleetReport, mockFleetPayload } = require("./nodes");
 const {
   buildChainDiscovery,
@@ -38,6 +40,7 @@ const {
   verifyHashChain
 } = require("./chain");
 const { startShare, earningsReport, DEFAULT_MRG_PER_GB } = require("./share");
+const { startIDE } = require("./ide");
 
 async function main(argv) {
   const [command = "help", ...rest] = argv;
@@ -94,6 +97,9 @@ async function main(argv) {
       return solanaCommand(flags);
     case "status":
       return statusCommand(flags);
+    case "ide":
+    case "serve":
+      return ideCommand(flags);
     case "share":
     case "bandwidth":
       return shareCommand(flags);
@@ -103,6 +109,84 @@ async function main(argv) {
       return help();
     default:
       throw new Error(`unknown command: ${command}`);
+  }
+}
+
+async function ideCommand(flags) {
+  const handle = await startIDE({
+    settings: flags.settings,
+    host: flags.host,
+    port: flags.port,
+    workspaceRoot: flags.workspace
+  });
+  const runningFile = writeIDERunningFile(handle);
+  const payload = {
+    url: handle.url,
+    host: handle.host,
+    port: handle.port,
+    workspace_root: handle.workspaceRoot,
+    running_file: runningFile
+  };
+  if (flags.json) {
+    console.log(JSON.stringify(payload, null, 2));
+  } else {
+    console.log("# MRGMinner IDE started");
+    console.log(`url\t${handle.url}`);
+    console.log(`workspace\t${handle.workspaceRoot}`);
+    console.log(`state\t${runningFile}`);
+    console.log("# Press Ctrl+C to stop.");
+  }
+  if (flags.once) {
+    await closeIDEServer(handle, runningFile);
+    return;
+  }
+  if (!flags.json && !flags.noOpen && flags.open !== "false") {
+    openIDEURL(handle.url);
+  }
+  const stop = async () => {
+    console.log("\n# stopping MRGMinner IDE...");
+    await closeIDEServer(handle, runningFile);
+    process.exit(0);
+  };
+  process.on("SIGINT", stop);
+  process.on("SIGTERM", stop);
+  await new Promise(() => {});
+}
+
+function writeIDERunningFile(handle) {
+  const directory = path.join(handle.workspaceRoot, ".mergeide");
+  fs.mkdirSync(directory, { recursive: true });
+  const filePath = path.join(directory, "ide-running.json");
+  fs.writeFileSync(
+    filePath,
+    `${JSON.stringify({
+      url: handle.url,
+      host: handle.host,
+      port: handle.port,
+      workspace_root: handle.workspaceRoot,
+      started_at: new Date().toISOString()
+    }, null, 2)}\n`,
+    "utf8"
+  );
+  return filePath;
+}
+
+function openIDEURL(url) {
+  const platform = process.platform;
+  const command = platform === "win32" ? "cmd" : platform === "darwin" ? "open" : "xdg-open";
+  const args = platform === "win32" ? ["/c", "start", "", url] : [url];
+  const child = spawnChild(command, args, {
+    detached: true,
+    stdio: "ignore",
+    shell: false
+  });
+  child.unref();
+}
+
+async function closeIDEServer(handle, runningFile) {
+  await new Promise((resolve) => handle.server.close(() => resolve()));
+  if (runningFile && fs.existsSync(runningFile)) {
+    fs.unlinkSync(runningFile);
   }
 }
 
@@ -233,7 +317,7 @@ async function tasksCommand(flags) {
 async function promptCommand(flags) {
   const taskID = requiredPositional(flags, "task id");
   const settings = await loadSettings(flags.settings, settingsFromFlags(flags));
-  const task = await findTask(settings, taskID);
+  const task = await resolveRunnableTask(settings, taskID);
   const artifacts = await prepareTaskArtifacts(settings, task, {
     workspaceRoot: flags.workspace
   });
@@ -243,7 +327,7 @@ async function promptCommand(flags) {
 async function runCommand(flags) {
   const taskID = requiredPositional(flags, "task id");
   const settings = await loadSettings(flags.settings, settingsFromFlags(flags));
-  const task = await findTask(settings, taskID);
+  const task = await resolveRunnableTask(settings, taskID);
   const result = await runAIForTask(settings, task, {
     workspaceRoot: flags.workspace
   });
@@ -257,6 +341,13 @@ async function runCommand(flags) {
   if (shouldSubmitAfterRun(flags)) {
     await submitAndRecord(settings, task, flags);
   }
+}
+
+async function resolveRunnableTask(settings, taskID) {
+  if (isWelcomeAITaskID(taskID)) {
+    return welcomeAITask();
+  }
+  return findTask(settings, taskID);
 }
 
 async function claimCommand(flags) {
@@ -445,6 +536,7 @@ async function dryRunNext(settings, task, flags) {
       task_file: artifacts.taskFile,
       ai_command: invocation.command,
       ai_args: invocation.args,
+      ai_stdin: Boolean(invocation.stdin),
       ai_error: invocation.error || null,
       prompt: artifacts.prompt
     }, null, 2));
@@ -1462,6 +1554,7 @@ function help() {
 Usage:
   mrgminner configure --mergeos-url https://mergeos.shop --provider claude --worker-id github:you
   mrgminner login --email you@example.com --password secret
+  mrgminner ide [--host 127.0.0.1] [--port 17331] [--workspace .] [--no-open]
   mrgminner status [--json] [--mock]
   mrgminner demo | live                             # full live smoke (public APIs)
   mrgminner tasks --open
