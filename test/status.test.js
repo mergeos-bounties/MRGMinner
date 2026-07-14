@@ -19,7 +19,7 @@ test("redactToken reports missing tokens without leaking length", () => {
 });
 
 test("redactToken never returns the raw token", () => {
-  const raw = "mergeide-live-token-9f8e7d6c5b4a";
+  const raw = "mrg-demo-key-9f8e7d6c5b4a";
   const redacted = redactToken(raw);
   assert.notEqual(redacted, raw);
   assert.doesNotMatch(redacted, /9f8e7d6c5b4a/);
