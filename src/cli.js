@@ -125,6 +125,28 @@ async function shareCommand(flags) {
     console.log(`# Pair with TrucVPN: trucvpn connect --region <code>`);
     return;
   }
+  if (sub === "history") {
+    const { earningsReport } = require("./share");
+    const report = earningsReport();
+    const history = report.history || [];
+    if (flags.json) {
+      console.log(JSON.stringify(history, null, 2));
+      return;
+    }
+    console.log("# MRGMinner share claim-mock history");
+    if (history.length === 0) {
+      console.log("(no claim-mock events yet - start share and POST /v1/claim-mock to populate)");
+      return;
+    }
+    console.log("id\tat\tbytes_total\tmrg_earned\tworker_id");
+    for (const h of history) {
+      const b = String(h.bytes_total != null ? h.bytes_total : "");
+      const m = String(h.mrg_earned != null ? h.mrg_earned : "");
+      const w = h.worker_id || "";
+      console.log(h.id + "\t" + h.at + "\t" + b + "\t" + m + "\t" + w);
+    }
+    return;
+  }
   if (sub === "status") {
     const report = earningsReport();
     console.log(JSON.stringify({ stream: "bandwidth-share", ...report }, null, 2));
