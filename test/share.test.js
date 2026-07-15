@@ -41,6 +41,42 @@ describe("share bandwidth stream", () => {
     assert.ok(typeof stats.mrg_earned_session === "number");
   });
 
+  it("advertises every configured logical region with weights", async () => {
+    const regionalHandle = await startShare({
+      host: "127.0.0.1",
+      port: 18010,
+      socksPort: 18020,
+      region: "vn",
+      city: "Ho Chi Minh",
+      exitId: "share-primary",
+      workerId: "test:share",
+      regions: "vn:Ho Chi Minh:70,sg:Singapore:30"
+    });
+
+    try {
+      const exits = await fetch("http://127.0.0.1:18010/v1/exits").then((r) => r.json());
+      assert.equal(exits.exits.length, 4);
+      assert.deepEqual(
+        exits.exits.map((exit) => [exit.id, exit.region, exit.city, exit.weight, exit.protocol]),
+        [
+          ["share-primary-vn-1", "vn", "Ho Chi Minh", 70, "socks5"],
+          ["share-primary-vn-1-http", "vn", "Ho Chi Minh", 70, "http-connect"],
+          ["share-primary-sg-2", "sg", "Singapore", 30, "socks5"],
+          ["share-primary-sg-2-http", "sg", "Singapore", 30, "http-connect"]
+        ]
+      );
+      assert.deepEqual(
+        regionalHandle.getStats().advertised_regions.map((exit) => [exit.exit_id, exit.region, exit.weight]),
+        [
+          ["share-primary-vn-1", "vn", 70],
+          ["share-primary-sg-2", "sg", 30]
+        ]
+      );
+    } finally {
+      await regionalHandle.stop();
+    }
+  });
+
   it("earnings report shape", () => {
     const r = earningsReport();
     assert.equal(r.stream, "bandwidth-share");

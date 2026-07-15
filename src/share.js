@@ -61,6 +61,81 @@ function mrgForBytes(bytes, mrgPerGb) {
   return Math.round(gb * Number(mrgPerGb || DEFAULT_MRG_PER_GB) * 1000) / 1000;
 }
 
+function parseRegionSpecs(value) {
+  if (!value) {
+    return [];
+  }
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (typeof value !== "string") {
+    return [value];
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+    const parsed = JSON.parse(trimmed);
+    return Array.isArray(parsed) ? parsed : [parsed];
+  }
+
+  return trimmed
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const [region, cityOrWeight, weight] = entry.split(":").map((part) => part.trim());
+      const parsed = { region };
+      if (cityOrWeight) {
+        if (weight === undefined && Number.isFinite(Number(cityOrWeight))) {
+          parsed.weight = Number(cityOrWeight);
+        } else {
+          parsed.city = cityOrWeight;
+        }
+      }
+      if (weight !== undefined) {
+        parsed.weight = Number(weight);
+      }
+      return parsed;
+    });
+}
+
+function positiveNumber(value, fallback) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+function normalizeShareRegions(options, defaults) {
+  const specs = parseRegionSpecs(options.regions || options.advertisedRegions || options.exits);
+  const entries = specs.length ? specs : [defaults];
+
+  return entries.map((entry, index) => {
+    const region = String(entry.region || entry.code || defaults.region).trim() || defaults.region;
+    const city = String(entry.city || defaults.city).trim() || defaults.city;
+    const exitId =
+      entry.exitId ||
+      entry.exit_id ||
+      entry.id ||
+      (specs.length ? `${defaults.exitId}-${region}-${index + 1}` : defaults.exitId);
+    const mrgPerGb = positiveNumber(entry.mrgPerGb || entry.mrg_per_gb, defaults.mrgPerGb);
+    const weight = positiveNumber(entry.weight || entry.routingWeight || entry.routing_weight, 1);
+
+    return {
+      exit_id: String(exitId),
+      name: entry.name || `${city} residential share`,
+      region,
+      city,
+      weight,
+      worker_id: defaults.workerId,
+      mrg_per_gb: mrgPerGb,
+      advertise_host: entry.advertiseHost || entry.advertise_host || defaults.advertiseHost
+    };
+  });
+}
+
 /**
  * Minimal SOCKS5 server that dials destinations directly from the sharer's network
  * (residential IP of the host). This is the "share path" TrucVPN tunnels through.
@@ -162,27 +237,34 @@ function createShareControlServer({ host, port, meta, getStats, socksPort, onByt
       return sendJson(res, { ok: true, role: "mrgminner-share", ...meta });
     }
     if (url.pathname === "/v1/exits") {
-      const exit = {
-        id: meta.exit_id,
-        name: meta.name,
-        region: meta.region,
-        city: meta.city,
-        latency_ms: 15,
-        load: Math.min(0.95, (getStats().active_connections || 0) / 50),
-        protocol: "socks5",
-        host: meta.advertise_host || host,
-        port: socksPort,
-        residential: true,
-        source: "mrgminner-share",
-        mrg_per_gb_sharer: meta.mrg_per_gb
-      };
-      const httpExit = {
-        ...exit,
-        id: `${meta.exit_id}-http`,
-        protocol: "http-connect",
-        port
-      };
-      return sendJson(res, { exits: [exit, httpExit], sharer: meta.worker_id });
+      const load = Math.min(0.95, (getStats().active_connections || 0) / 50);
+      const exits = meta.regions.flatMap((advertised) => {
+        const exit = {
+          id: advertised.exit_id,
+          name: advertised.name,
+          region: advertised.region,
+          city: advertised.city,
+          weight: advertised.weight,
+          latency_ms: 15,
+          load,
+          protocol: "socks5",
+          host: advertised.advertise_host || meta.advertise_host || host,
+          port: socksPort,
+          residential: true,
+          source: "mrgminner-share",
+          mrg_per_gb_sharer: advertised.mrg_per_gb
+        };
+        return [
+          exit,
+          {
+            ...exit,
+            id: `${advertised.exit_id}-http`,
+            protocol: "http-connect",
+            port
+          }
+        ];
+      });
+      return sendJson(res, { exits, sharer: meta.worker_id });
     }
     if (url.pathname === "/v1/earnings") {
       return sendJson(res, getStats());
@@ -252,6 +334,16 @@ async function startShare(options = {}) {
   const workerId = options.workerId || "mrgminner:share-local";
   const mrgPerGb = Number(options.mrgPerGb || DEFAULT_MRG_PER_GB);
   const exitId = options.exitId || `share-${region}-${crypto.randomBytes(2).toString("hex")}`;
+  const advertiseHost = options.advertiseHost || host;
+  const advertisedRegions = normalizeShareRegions(options, {
+    region,
+    city,
+    exitId,
+    workerId,
+    mrgPerGb,
+    advertiseHost
+  });
+  const primaryRegion = advertisedRegions[0];
 
   const session = {
     bytes_in: 0,
@@ -279,13 +371,14 @@ async function startShare(options = {}) {
   });
 
   const meta = {
-    exit_id: exitId,
-    name: `${city} residential share`,
-    region,
-    city,
+    exit_id: primaryRegion.exit_id,
+    name: primaryRegion.name,
+    region: primaryRegion.region,
+    city: primaryRegion.city,
     worker_id: workerId,
-    mrg_per_gb: mrgPerGb,
-    advertise_host: options.advertiseHost || host
+    mrg_per_gb: primaryRegion.mrg_per_gb,
+    advertise_host: primaryRegion.advertise_host,
+    regions: advertisedRegions
   };
 
   const getStats = () => {
@@ -293,10 +386,17 @@ async function startShare(options = {}) {
     const lifetime = loadShareState();
     return {
       ok: true,
-      exit_id: exitId,
+      exit_id: primaryRegion.exit_id,
       worker_id: workerId,
-      region,
-      city,
+      region: primaryRegion.region,
+      city: primaryRegion.city,
+      advertised_regions: advertisedRegions.map((advertised) => ({
+        exit_id: advertised.exit_id,
+        region: advertised.region,
+        city: advertised.city,
+        weight: advertised.weight,
+        mrg_per_gb: advertised.mrg_per_gb
+      })),
       bytes_in: session.bytes_in,
       bytes_out: session.bytes_out,
       bytes_total,

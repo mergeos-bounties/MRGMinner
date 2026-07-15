@@ -154,6 +154,7 @@ Share your connection as a **residential exit**. TrucVPN clients route SOCKS5/HT
 ```powershell
 # Terminal A — sharer
 node .\bin\mrgminner.js share start --region vn --city "Ho Chi Minh" --port 17890
+node .\bin\mrgminner.js share start --regions "vn:Ho Chi Minh:70,sg:Singapore:30" --port 17890
 node .\bin\mrgminner.js share earnings
 
 # Terminal B — VPN client (TrucVPN)
@@ -162,6 +163,8 @@ trucvpn connect --region vn
 ```
 
 Discovery API: `GET /v1/health`, `GET /v1/exits`, `GET /v1/earnings`, `POST /v1/claim-mock`.
+Use `--regions "code:city:weight,code:city:weight"` when one share process should advertise multiple logical regions.
+Each logical region appears in `/v1/exits` as SOCKS5 and HTTP CONNECT exits with a stable exit id and `weight` for TrucVPN routing.
 
 ---
 
