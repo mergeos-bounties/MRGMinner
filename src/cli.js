@@ -270,6 +270,7 @@ async function shareCommand(flags) {
       socksPort: flags.socksPort ? Number(flags.socksPort) : undefined,
       region: flags.region || "vn",
       city: flags.city || "Ho Chi Minh",
+      regions: flags.regions,
       workerId,
       mrgPerGb: flags.mrgPerGb ? Number(flags.mrgPerGb) : DEFAULT_MRG_PER_GB,
       advertiseHost: flags.advertiseHost || flags.host || "127.0.0.1"
@@ -280,6 +281,12 @@ async function shareCommand(flags) {
     console.log(`control\t${stats.control}`);
     console.log(`socks\t${stats.socks}`);
     console.log(`region\t${stats.region}\t${stats.city}`);
+    if (stats.advertised_regions && stats.advertised_regions.length > 1) {
+      const listed = stats.advertised_regions
+        .map((exit) => `${exit.region}:${exit.city}:${exit.weight}`)
+        .join(",");
+      console.log(`regions\t${listed}`);
+    }
     console.log(`mrg_per_gb\t${stats.mrg_per_gb}`);
     console.log(`# TrucVPN: trucvpn configure --share-url ${stats.control}`);
     console.log(`#          trucvpn connect --region ${stats.region}`);
@@ -1615,7 +1622,7 @@ Usage:
   mrgminner solana [--json] [--mock]            # Solana program + ix map
 
   # Bandwidth share stream (residential exit → earn MRG; pairs with TrucVPN)
-  mrgminner share start [--region vn] [--city "Ho Chi Minh"] [--port 17890]
+  mrgminner share start [--region vn] [--city "Ho Chi Minh"] [--regions "vn:Ho Chi Minh:70,sg:Singapore:30"] [--port 17890]
   mrgminner share status
   mrgminner share earnings [--json]
   # TrucVPN client: trucvpn configure --share-url http://127.0.0.1:17890
