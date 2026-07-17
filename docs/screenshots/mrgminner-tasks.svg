@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 340">
+  <rect width="800" height="340" rx="6" fill="#1e1e2e"/>
+  <rect x="0" y="0" width="800" height="24" rx="6" fill="#313244"/>
+  <rect x="0" y="18" width="800" height="6" fill="#313244"/>
+  <circle cx="14" cy="12" r="5" fill="#f38ba8"/>
+  <circle cx="30" cy="12" r="5" fill="#fab387"/>
+  <circle cx="46" cy="12" r="5" fill="#a6e3a1"/>
+  <text x="800" y="13" text-anchor="end" fill="#6c7086" font-family="monospace" font-size="10">MRGMinner Tasks</text>
+
+  <text x="20" y="48" fill="#f5c2e7" font-family="monospace" font-size="12">$</text>
+  <text x="32" y="48" fill="#cdd6f4" font-family="monospace" font-size="12">mrgminner tasks --open</text>
+
+  <!-- Table header -->
+  <rect x="16" y="60" width="768" height="22" rx="2" fill="#45475a"/>
+  <text x="24" y="75" fill="#cdd6f4" font-family="monospace" font-size="10" font-weight="bold">Task ID</text>
+  <text x="200" y="75" fill="#cdd6f4" font-family="monospace" font-size="10" font-weight="bold">Project</text>
+  <text x="380" y="75" fill="#cdd6f4" font-family="monospace" font-size="10" font-weight="bold">Title</text>
+  <text x="580" y="75" fill="#cdd6f4" font-family="monospace" font-size="10" font-weight="bold">Reward</text>
+  <text x="700" y="75" fill="#cdd6f4" font-family="monospace" font-size="10" font-weight="bold">Status</text>
+
+  <!-- Row 1 -->
+  <rect x="16" y="84" width="768" height="22" fill="#1e1e2e"/>
+  <text x="24" y="99" fill="#89b4fa" font-family="monospace" font-size="10">prj_0428:1</text>
+  <text x="200" y="99" fill="#cdd6f4" font-family="monospace" font-size="10">MRGMinner</text>
+  <text x="380" y="99" fill="#cdd6f4" font-family="monospace" font-size="10">Docs: install + configure quickstart screenshots</text>
+  <text x="580" y="99" fill="#f9e2af" font-family="monospace" font-size="10">25 MRG</text>
+  <text x="700" y="99" fill="#a6e3a1" font-family="monospace" font-size="10">open</text>
+
+  <!-- Row 2 -->
+  <rect x="16" y="108" width="768" height="22" fill="#313244"/>
+  <text x="24" y="123" fill="#89b4fa" font-family="monospace" font-size="10">prj_0428:2</text>
+  <text x="200" y="123" fill="#cdd6f4" font-family="monospace" font-size="10">MRGMinner</text>
+  <text x="380" y="123" fill="#cdd6f4" font-family="monospace" font-size="10">CLI: share history — show claim-mock history table</text>
+  <text x="580" y="123" fill="#f9e2af" font-family="monospace" font-size="10">50 MRG</text>
+  <text x="700" y="123" fill="#a6e3a1" font-family="monospace" font-size="10">open</text>
+
+  <!-- Row 3 -->
+  <rect x="16" y="132" width="768" height="22" fill="#1e1e2e"/>
+  <text x="24" y="147" fill="#89b4fa" font-family="monospace" font-size="10">prj_0428:3</text>
+  <text x="200" y="147" fill="#cdd6f4" font-family="monospace" font-size="10">MRGMinner</text>
+  <text x="380" y="147" fill="#cdd6f4" font-family="monospace" font-size="10">Feature: share rate limit (max connections / Mbps)</text>
+  <text x="580" y="147" fill="#f9e2af" font-family="monospace" font-size="10">50 MRG</text>
+  <text x="700" y="147" fill="#a6e3a1" font-family="monospace" font-size="10">open</text>
+
+  <!-- Row 4 -->
+  <rect x="16" y="156" width="768" height="22" fill="#313244"/>
+  <text x="24" y="171" fill="#89b4fa" font-family="monospace" font-size="10">prj_0428:4</text>
+  <text x="200" y="171" fill="#cdd6f4" font-family="monospace" font-size="10">TrucVPN</text>
+  <text x="380" y="171" fill="#cdd6f4" font-family="monospace" font-size="10">Dashboard: dark/light theme toggle</text>
+  <text x="580" y="171" fill="#f9e2af" font-family="monospace" font-size="10">50 MRG</text>
+  <text x="700" y="171" fill="#a6e3a1" font-family="monospace" font-size="10">open</text>
+
+  <!-- Row 5 -->
+  <rect x="16" y="180" width="768" height="22" fill="#1e1e2e"/>
+  <text x="24" y="195" fill="#89b4fa" font-family="monospace" font-size="10">prj_0428:5</text>
+  <text x="200" y="195" fill="#cdd6f4" font-family="monospace" font-size="10">MRGWallet</text>
+  <text x="380" y="195" fill="#cdd6f4" font-family="monospace" font-size="10">Docs: install screenshots Chrome + Firefox + Android</text>
+  <text x="580" y="195" fill="#f9e2af" font-family="monospace" font-size="10">25 MRG</text>
+  <text x="700" y="195" fill="#a6e3a1" font-family="monospace" font-size="10">open</text>
+
+  <!-- Summary -->
+  <text x="20" y="220" fill="#6c7086" font-family="monospace" font-size="10">5 open bounties across 3 projects</text>
+  <text x="20" y="234" fill="#6c7086" font-family="monospace" font-size="10">Total available: 200 MRG</text>
+
+  <!-- Next command hint -->
+  <text x="20" y="260" fill="#f5c2e7" font-family="monospace" font-size="12">$</text>
+  <text x="32" y="260" fill="#cdd6f4" font-family="monospace" font-size="12">mrgminner claim prj_0428:1 --with-intent</text>
+
+  <text x="20" y="280" fill="#a6e3a1" font-family="monospace" font-size="11">✓</text>
+  <text x="32" y="280" fill="#94e2d5" font-family="monospace" font-size="11">Claim intent created</text>
+  <text x="20" y="296" fill="#6c7086" font-family="monospace" font-size="10">intent_hash:</text>
+  <text x="140" y="296" fill="#cdd6f4" font-family="monospace" font-size="10">sha256:abc123def456</text>
+  <text x="20" y="308" fill="#6c7086" font-family="monospace" font-size="10">pack_hash:</text>
+  <text x="140" y="308" fill="#cdd6f4" font-family="monospace" font-size="10">sha256:789ghi012jkl</text>
+  <text x="20" y="320" fill="#6c7086" font-family="monospace" font-size="10">ledger_reference:</text>
+  <text x="140" y="320" fill="#cdd6f4" font-family="monospace" font-size="10">0x1234...5678 (bytes32)</text>
+
+  <text x="20" y="336" fill="#a6e3a1" font-family="monospace" font-size="11">Ready to run: mrgminner run prj_0428:1</text>
+
+</svg>
