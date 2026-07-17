@@ -79,6 +79,14 @@ C:\tools\mrgminner\MRGMinner-Windows-x64.exe --help
 
 See [docs/INSTALL.md](docs/INSTALL.md) for detailed install steps.
 
+### Quickstart screenshots
+
+| Step | Screenshot |
+|------|-----------|
+| **Configure** — set MergeOS URL, AI provider, worker ID | [![configure](docs/screenshots/mrgminner-configure.svg)](docs/screenshots/mrgminner-configure.svg) |
+| **Login** — authenticate with email + password | [![login](docs/screenshots/mrgminner-login.svg)](docs/screenshots/mrgminner-login.svg) |
+| **Tasks** — browse open bounties + claim with intent | [![tasks](docs/screenshots/mrgminner-tasks.svg)](docs/screenshots/mrgminner-tasks.svg) |
+
 ### From source
 
 ```powershell
