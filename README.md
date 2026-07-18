@@ -159,6 +159,8 @@ Auto PR creation requires `git`, GitHub CLI (`gh auth status` must pass), and pu
 
 Share your connection as a **residential exit**. TrucVPN clients route SOCKS5/HTTP through your node; you accrue MRG by the gigabyte (`mrg_per_gb`, default **5**).
 
+See the full guide: [docs/SHARE.md](docs/SHARE.md)
+
 ```powershell
 # Terminal A — sharer
 node .\bin\mrgminner.js share start --region vn --city "Ho Chi Minh" --port 17890
