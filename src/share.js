@@ -230,7 +230,7 @@ function createShareSocksServer({ host, port, onBytes }) {
  * HTTP control plane for discovery + earnings status.
  * Also accepts HTTP CONNECT so TrucVPN can use protocol http-connect.
  */
-function createShareControlServer({ host, port, meta, getStats, socksPort, onBytes }) {
+function createShareControlServer({ host, port, meta, getStats, socksPort, onBytes, token, apiUrl }) {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, `http://${host}:${port}`);
     if (url.pathname === "/v1/health") {
@@ -284,6 +284,7 @@ function createShareControlServer({ host, port, meta, getStats, socksPort, onByt
       state.mrg_earned_total = Math.round((Number(state.mrg_earned_total) + claim.mrg_earned) * 1000) / 1000;
       state.history = [claim, ...(state.history || [])].slice(0, 50);
       saveShareState(state);
+      postEarningsToLedger(stats, token, apiUrl);
       return sendJson(res, { ok: true, claim, lifetime_mrg: state.mrg_earned_total });
     }
     res.writeHead(404);
@@ -320,6 +321,48 @@ function createShareControlServer({ host, port, meta, getStats, socksPort, onByt
 function sendJson(res, data) {
   res.writeHead(200, { "Content-Type": "application/json" });
   res.end(JSON.stringify(data, null, 2));
+}
+
+/**
+ * Post bandwidth earnings to the MergeOS ledger API (optional).
+ * Silently skips when no token is provided. Never throws.
+ */
+async function postEarningsToLedger(stats, token, apiUrl) {
+  if (!token) {
+    return null;
+  }
+  const baseUrl = String(apiUrl || "https://mergeos.shop").trim().replace(/\/+$/, "");
+  const url = `${baseUrl}/v1/bandwidth/claims`;
+  const headers = {
+    "Content-Type": "application/json",
+    Accept: "application/json"
+  };
+  headers.Authorization = String(token).startsWith("Bearer ") ? String(token) : `Bearer ${String(token)}`;
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        worker_id: stats.worker_id,
+        bytes_total: stats.bytes_total,
+        mrg_earned: stats.mrg_earned_session,
+        stream: "bandwidth-share",
+        claimed_at: new Date().toISOString()
+      })
+    });
+    const text = await response.text();
+    const payload = text ? JSON.parse(text) : null;
+    if (!response.ok) {
+      const message = payload && payload.error ? payload.error : `${response.status} ${response.statusText}`;
+      console.warn(`[share] MergeOS ledger post skipped: ${message}`);
+      return null;
+    }
+    console.log(`[share] bandwidth claim posted to ledger (${stats.bytes_total} bytes, ${stats.mrg_earned_session} MRG)`);
+    return payload;
+  } catch (error) {
+    console.warn(`[share] MergeOS ledger unavailable: ${error.message}`);
+    return null;
+  }
 }
 
 /**
@@ -381,6 +424,9 @@ async function startShare(options = {}) {
     regions: advertisedRegions
   };
 
+  const token = options.token || "";
+  const apiUrl = options.apiUrl || "";
+
   const getStats = () => {
     const bytes_total = session.bytes_in + session.bytes_out;
     const lifetime = loadShareState();
@@ -417,7 +463,9 @@ async function startShare(options = {}) {
     meta,
     getStats,
     socksPort,
-    onBytes
+    onBytes,
+    token,
+    apiUrl
   });
 
   // persist running marker
@@ -481,5 +529,6 @@ module.exports = {
   mrgForBytes,
   loadShareState,
   saveShareState,
-  shareStatePath
+  shareStatePath,
+  postEarningsToLedger
 };

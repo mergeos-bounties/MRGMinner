@@ -277,7 +277,9 @@ async function shareCommand(flags) {
       regions: flags.regions,
       workerId,
       mrgPerGb: flags.mrgPerGb ? Number(flags.mrgPerGb) : DEFAULT_MRG_PER_GB,
-      advertiseHost: flags.advertiseHost || flags.host || "127.0.0.1"
+      advertiseHost: flags.advertiseHost || flags.host || "127.0.0.1",
+      token: settings.mergeos && settings.mergeos.token,
+      apiUrl: settings.mergeos && settings.mergeos.baseUrl
     });
     const stats = handle.getStats();
     console.log("# MRGMinner share started (bandwidth → MRG)");

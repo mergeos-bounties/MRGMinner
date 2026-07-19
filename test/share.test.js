@@ -3,7 +3,7 @@
 const { describe, it, after, before } = require("node:test");
 const assert = require("node:assert/strict");
 const net = require("node:net");
-const { startShare, mrgForBytes, earningsReport, DEFAULT_MRG_PER_GB } = require("../src/share");
+const { startShare, mrgForBytes, earningsReport, DEFAULT_MRG_PER_GB, postEarningsToLedger } = require("../src/share");
 
 describe("share bandwidth stream", () => {
   let handle;
@@ -149,6 +149,78 @@ describe("share bandwidth stream", () => {
     } finally {
       await share.stop();
       echoServer.close();
+    }
+  });
+});
+
+describe("postEarningsToLedger", () => {
+  it("makes correct POST request with auth token", async () => {
+    const originalFetch = global.fetch;
+    let callUrl, callOptions;
+    global.fetch = async (url, options) => {
+      callUrl = url;
+      callOptions = options;
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ ok: true, claim_id: "test_123" })
+      };
+    };
+    try {
+      const stats = { worker_id: "test:worker", bytes_total: 1000, mrg_earned_session: 0.005 };
+      const result = await postEarningsToLedger(stats, "test-token", "https://mergeos.shop");
+      assert.equal(callUrl, "https://mergeos.shop/v1/bandwidth/claims");
+      assert.equal(callOptions.method, "POST");
+      assert.equal(callOptions.headers.Authorization, "Bearer test-token");
+      const body = JSON.parse(callOptions.body);
+      assert.equal(body.worker_id, "test:worker");
+      assert.equal(body.bytes_total, 1000);
+      assert.equal(body.mrg_earned, 0.005);
+      assert.equal(body.stream, "bandwidth-share");
+      assert.ok(body.claimed_at);
+      assert.equal(result.ok, true);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it("gracefully skips when no token", async () => {
+    const result = await postEarningsToLedger({ worker_id: "test" }, "", "https://mergeos.shop");
+    assert.equal(result, null);
+  });
+
+  it("gracefully handles API 5xx failure", async () => {
+    const originalFetch = global.fetch;
+    global.fetch = async () => ({
+      ok: false,
+      status: 500,
+      statusText: "Internal Server Error",
+      text: async () => JSON.stringify({ error: "server error" })
+    });
+    try {
+      const result = await postEarningsToLedger(
+        { worker_id: "test", bytes_total: 100, mrg_earned_session: 0.001 },
+        "test-token",
+        "https://mergeos.shop"
+      );
+      assert.equal(result, null);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it("gracefully handles network error", async () => {
+    const originalFetch = global.fetch;
+    global.fetch = async () => { throw new Error("ECONNREFUSED"); };
+    try {
+      const result = await postEarningsToLedger(
+        { worker_id: "test", bytes_total: 100, mrg_earned_session: 0.001 },
+        "test-token",
+        "https://mergeos.shop"
+      );
+      assert.equal(result, null);
+    } finally {
+      global.fetch = originalFetch;
     }
   });
 });
