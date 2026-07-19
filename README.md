@@ -126,7 +126,7 @@ Configure + authenticate for claim/run/submit:
 
 ```powershell
 node .\bin\mrgminner.js configure --mergeos-url https://mergeos.shop --provider claude --worker-id github:yourname
-node .\bin\mrgminner.js login --email you@example.com --password your-password
+node .\bin\mrgminner.js login --email you@example.com --password [your-password]
 node .\bin\mrgminner.js tasks --open
 node .\bin\mrgminner.js claim <task-id> --with-intent
 ```
