@@ -611,11 +611,9 @@ async function packCommand(flags) {
   await zipDirectory(artifactRoot, outPath);
   console.log(`Packaged ${artifactRoot} → ${outPath}`);
 }
-}
 
 function redactToken(token) {
   if (!token) return "(not set)";
-  if (token.length < 8) return token;
   const keep = Math.max(2, Math.floor(token.length / 6));
   const stars = token.length - keep * 2;
   return token.slice(0, keep) + "*".repeat(stars) + token.slice(-keep);
