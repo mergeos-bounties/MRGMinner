@@ -41,7 +41,8 @@ const {
   summarizeTokenEconomy,
   verifyHashChain
 } = require("./chain");
-const { zipDirectory } = require("./pack");
+const { startShare, earningsReport, DEFAULT_MRG_PER_GB } = require("./share");
+const { startIDE } = require("./ide");
 
 async function main(argv) {
   const [command = "help", ...rest] = argv;
@@ -100,10 +101,16 @@ async function main(argv) {
       return solanaCommand(flags);
     case "status":
       return statusCommand(flags);
-    case "pack":
-      return packCommand(flags);
-    case "status":
-      return statusCommand(flags);
+    case "ide":
+    case "serve":
+      return ideCommand(flags);
+    case "share":
+    case "bandwidth":
+      return shareCommand(flags);
+    case "version":
+    case "--version":
+    case "-V":
+      return versionCommand(flags);
     case "help":
     case "--help":
     case "-h":
@@ -594,37 +601,6 @@ async function dryRunNext(settings, task, flags) {
   console.log("");
   console.log("# --- prompt ---");
   console.log(artifacts.prompt);
-}
-
-async function packCommand(flags) {
-  const taskID = requiredPositional(flags, "task id");
-  const settings = await loadSettings(flags.settings, settingsFromFlags(flags));
-  const workspaceRoot = path.resolve(flags.workspace || settings.workspace && settings.workspace.root || process.cwd());
-  const artifactRoot = path.join(workspaceRoot, ".mergeide", "tasks", taskID);
-  const exists = await fs.promises.stat(artifactRoot).then(() => true).catch(() => false);
-  if (!exists) {
-    throw new Error(`No artifacts found for task ${taskID} at ${artifactRoot}`);
-  }
-  const outDir = flags.output || path.join(workspaceRoot, ".mergeide", "packages");
-  await fs.promises.mkdir(outDir, { recursive: true });
-  const outPath = path.join(outDir, `evidence-${taskID}.zip`);
-  await zipDirectory(artifactRoot, outPath);
-  console.log(`Packaged ${artifactRoot} → ${outPath}`);
-}
-
-
-async function statusCommand(flags) {
-  const settings = await loadSettings(flags.settings, settingsFromFlags(flags));
-  console.log("MergeOS URL:  " + (settings.mergeos && settings.mergeos.baseUrl || "(not set)"));
-  console.log("Token:        " + redactToken(settings.mergeos && settings.mergeos.token));
-  console.log("Worker ID:    " + (settings.worker && settings.worker.id || "(not set)"));
-  console.log("AI Provider:  " + (settings.ai && settings.ai.provider || "(not set)"));
-  if (settings.ai && settings.ai.command) {
-    console.log("AI Command:   " + settings.ai.command);
-  }
-  if (settings.workspace && settings.workspace.root) {
-    console.log("Workspace:    " + settings.workspace.root);
-  }
 }
 
 function parseFlags(args) {
@@ -1606,7 +1582,7 @@ async function statusCommand(flags) {
       mergeos_url: "http://localhost:8080",
       worker_id: "mrgminner:mock",
       provider: "mock",
-      token: redactToken("mrgminner:placeholder-redacted") // placeholder
+      token: redactToken("mock-token-abcd1234")
     };
     if (flags.json) {
       console.log(JSON.stringify(status, null, 2));
@@ -1662,7 +1638,8 @@ function help() {
 Usage:
   mrgminner version [--json]
   mrgminner configure --mergeos-url https://mergeos.shop --provider claude --worker-id github:you
-  mrgminner login --email you@example.com --password [your-password]
+  mrgminner login --email you@example.com --password secret
+  mrgminner ide [--host 127.0.0.1] [--port 17331] [--workspace .] [--no-open]
   mrgminner status [--json] [--mock]
   mrgminner demo | live                             # full live smoke (public APIs)
   mrgminner tasks --open
@@ -1673,8 +1650,6 @@ Usage:
   mrgminner pack <task-id> [--pr-url <url>]              # zip task artifacts
   mrgminner compare [--presets codex,claude] [--kind agent]
   mrgminner next [--kind agent] [--dry-run] [--claim] [--submit --pr-url <url>]
-  mrgminner pack <task-id> [--output <dir>]
-  mrgminner status
 
   # Agent nodes + claim-block cluster
   mrgminner nodes [--online] [--role job|review|audit] [--json] [--mock]
@@ -1716,7 +1691,7 @@ module.exports = {
   main,
   packCommand,
   parseFlags,
-  redactToken,
+  readPackageInfo,
   selectNextTask,
   settingsFromFlags,
   versionCommand

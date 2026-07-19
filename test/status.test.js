@@ -5,11 +5,11 @@ const assert = require("node:assert/strict");
 const { redactToken } = require("../src/settings");
 
 test("redactToken masks all but the last four characters", () => {
-  assert.equal(redactToken("[placeholder-value-1234]"), "****abcd");
+  assert.equal(redactToken("[placeholder-value-1234]"), "****234]");
 });
 
 test("redactToken strips a Bearer prefix before masking", () => {
-  assert.equal(redactToken("Bearer [placeholder-value-1234]"), "****abcd");
+  assert.equal(redactToken("Bearer [placeholder-value-1234]"), "****234]");
 });
 
 test("redactToken reports missing tokens without leaking length", () => {
@@ -29,5 +29,4 @@ test("redactToken never returns the raw token", () => {
 test("redactToken fully masks short tokens", () => {
   assert.equal(redactToken("abcd"), "****");
   assert.equal(redactToken("ab"), "****");
-});
 });
