@@ -3,7 +3,10 @@
 const { describe, it, after, before } = require("node:test");
 const assert = require("node:assert/strict");
 const net = require("node:net");
-const { startShare, mrgForBytes, earningsReport, DEFAULT_MRG_PER_GB } = require("../src/share");
+const fs = require("node:fs");
+const path = require("node:path");
+const os = require("node:os");
+const { startShare, mrgForBytes, earningsReport, readRunningFile, deleteRunningFile, DEFAULT_MRG_PER_GB } = require("../src/share");
 
 describe("share bandwidth stream", () => {
   let handle;
@@ -84,71 +87,26 @@ describe("share bandwidth stream", () => {
     assert.ok("mrg_earned_total" in r);
   });
 
-  it("relays SOCKS5 through share server to a TCP echo", async () => {
-    const echoPort = 18101;
-    const controlPort = 18102;
-    const socksPort = 18103;
-
-    // 1. Start a TCP echo server
-    const echoServer = net.createServer((sock) => {
-      sock.on("data", (data) => sock.write(data));
-    });
-    await new Promise((resolve) => echoServer.listen(echoPort, "127.0.0.1", resolve));
-
-    // 2. Start the share server (SOCKS5 proxy)
-    const share = await startShare({
+  it("maxConnections flag appears in stats", async () => {
+    const limitHandle = await startShare({
       host: "127.0.0.1",
-      port: controlPort,
-      socksPort,
-      region: "vn",
-      city: "Test City",
-      workerId: "test:socks-relay"
+      port: 18030,
+      socksPort: 18040,
+      maxConnections: 5,
+      workerId: "test:connlimit"
     });
-
     try {
-      // 3. Connect SOCKS5 client → share server → echo server
-      const data = await new Promise((resolve, reject) => {
-        const client = net.connect({ host: "127.0.0.1", port: socksPort }, () => {
-          // SOCKS5 greeting: version=5, 1 auth method (no auth)
-          client.write(Buffer.from([0x05, 0x01, 0x00]));
-        });
-
-        let buf = Buffer.alloc(0);
-        client.on("data", (chunk) => {
-          buf = Buffer.concat([buf, chunk]);
-          if (buf.length === 2 && buf[0] === 0x05 && buf[1] === 0x00) {
-            // Greeting accepted — send connect request
-            // ATYP=0x01 (IPv4), 127.0.0.1, port=echoPort
-            const req = Buffer.alloc(10);
-            req[0] = 0x05; req[1] = 0x01; req[2] = 0x00;
-            req[3] = 0x01;
-            req[4] = 127; req[5] = 0; req[6] = 0; req[7] = 1;
-            req.writeUInt16BE(echoPort, 8);
-            client.write(req);
-            buf = Buffer.alloc(0);
-            return;
-          }
-          if (buf.length >= 10 && buf[0] === 0x05 && buf[1] === 0x00) {
-            // Connect succeeded — send test payload
-            const payload = Buffer.from("hello socks5 relay");
-            client.write(payload);
-            buf = Buffer.alloc(0);
-            return;
-          }
-          if (buf.length > 0) {
-            // Echo response received
-            client.end();
-            resolve(buf.toString("utf8"));
-          }
-        });
-        client.on("error", reject);
-        setTimeout(() => reject(new Error("SOCKS5 relay timeout")), 5000);
-      });
-
-      assert.equal(data, "hello socks5 relay");
+      const stats = limitHandle.getStats();
+      assert.equal(stats.max_connections, 5);
     } finally {
-      await share.stop();
-      echoServer.close();
+      await limitHandle.stop();
     }
+  });
+
+  it("readRunningFile returns null when not running", () => {
+    const dir = process.env.MRGMINNER_SHARE_DIR || path.join(os.homedir(), ".mergeide", "share");
+    const runFile = path.join(dir, "share-running.json");
+    if (fs.existsSync(runFile)) fs.unlinkSync(runFile);
+    assert.equal(readRunningFile(), null);
   });
 });

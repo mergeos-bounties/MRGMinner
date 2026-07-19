@@ -20,10 +20,33 @@ const crypto = require("node:crypto");
 /** Default: 5 MRG per GB shared (sharer reward). */
 const DEFAULT_MRG_PER_GB = 5;
 
+function shareDir() {
+  return process.env.MRGMINNER_SHARE_DIR || path.join(os.homedir(), ".mergeide", "share");
+}
+
 function shareStatePath() {
-  const dir = process.env.MRGMINNER_SHARE_DIR || path.join(os.homedir(), ".mergeide", "share");
+  const dir = shareDir();
   fs.mkdirSync(dir, { recursive: true });
   return path.join(dir, "share-state.json");
+}
+
+function runningFilePath() {
+  return path.join(shareDir(), "share-running.json");
+}
+
+function readRunningFile() {
+  const p = runningFilePath();
+  if (!fs.existsSync(p)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(p, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function deleteRunningFile() {
+  const p = runningFilePath();
+  if (fs.existsSync(p)) fs.unlinkSync(p);
 }
 
 function loadShareState() {
@@ -140,8 +163,14 @@ function normalizeShareRegions(options, defaults) {
  * Minimal SOCKS5 server that dials destinations directly from the sharer's network
  * (residential IP of the host). This is the "share path" TrucVPN tunnels through.
  */
-function createShareSocksServer({ host, port, onBytes }) {
+function createShareSocksServer({ host, port, onBytes, maxConnections }) {
+  let activeConnections = 0;
   const server = net.createServer((client) => {
+    if (maxConnections && activeConnections >= maxConnections) {
+      client.destroy();
+      return;
+    }
+    activeConnections++;
     let buf = Buffer.alloc(0);
     let stage = "greeting";
 
@@ -215,7 +244,10 @@ function createShareSocksServer({ host, port, onBytes }) {
       });
       remote.on("error", fail);
       client.on("error", () => remote.destroy());
-      client.on("close", () => remote.destroy());
+      client.on("close", () => {
+        activeConnections--;
+        remote.destroy();
+      });
       remote.on("close", () => client.destroy());
     });
   });
@@ -335,6 +367,8 @@ async function startShare(options = {}) {
   const mrgPerGb = Number(options.mrgPerGb || DEFAULT_MRG_PER_GB);
   const exitId = options.exitId || `share-${region}-${crypto.randomBytes(2).toString("hex")}`;
   const advertiseHost = options.advertiseHost || host;
+  const maxConnections = options.maxConnections ? Number(options.maxConnections) : 0;
+  const maxMbps = options.maxMbps ? Number(options.maxMbps) : 0;
   const advertisedRegions = normalizeShareRegions(options, {
     region,
     city,
@@ -353,11 +387,31 @@ async function startShare(options = {}) {
     mrg_per_gb: mrgPerGb
   };
 
+  let throttleWindow = { bytes: 0, start: Date.now() };
+
   const onBytes = (dir, n) => {
     if (dir === "in") {
       session.bytes_in += n;
     } else {
       session.bytes_out += n;
+    }
+    if (maxMbps > 0) {
+      throttleWindow.bytes += n;
+      const elapsed = (Date.now() - throttleWindow.start) / 1000;
+      if (elapsed > 0) {
+        const bps = throttleWindow.bytes / elapsed;
+        const maxBps = maxMbps * 1024 * 1024;
+        if (bps > maxBps) {
+          const sleepMs = Math.ceil(((bps - maxBps) / maxBps) * 100);
+          const startSleep = Date.now();
+          while (Date.now() - startSleep < sleepMs) {
+            /* spin-wait — simple throttle */
+          }
+        }
+      }
+      if (elapsed > 1) {
+        throttleWindow = { bytes: 0, start: Date.now() };
+      }
     }
   };
 
@@ -367,7 +421,8 @@ async function startShare(options = {}) {
     port: socksPort,
     onBytes: (dir, n) => {
       onBytes(dir, n);
-    }
+    },
+    maxConnections
   });
 
   const meta = {
@@ -407,6 +462,8 @@ async function startShare(options = {}) {
       mrg_earned_lifetime: lifetime.mrg_earned_total || 0,
       control: `http://${host}:${controlPort}`,
       socks: `${host}:${socksPort}`,
+      max_connections: maxConnections || undefined,
+      max_mbps: maxMbps || undefined,
       stream: "bandwidth-share"
     };
   };
@@ -426,13 +483,11 @@ async function startShare(options = {}) {
     control: `http://${host}:${controlPort}`,
     socks: `${host}:${socksPort}`,
     meta,
+    max_connections: maxConnections || undefined,
+    max_mbps: maxMbps || undefined,
     started_at: new Date().toISOString()
   };
-  fs.writeFileSync(
-    path.join(path.dirname(shareStatePath()), "share-running.json"),
-    JSON.stringify(running, null, 2) + "\n",
-    "utf8"
-  );
+  fs.writeFileSync(runningFilePath(), JSON.stringify(running, null, 2) + "\n", "utf8");
 
   return {
     meta,
@@ -450,10 +505,7 @@ async function startShare(options = {}) {
       saveShareState(st);
       await new Promise((r) => socksServer.close(() => r()));
       await new Promise((r) => controlServer.close(() => r()));
-      const runFile = path.join(path.dirname(shareStatePath()), "share-running.json");
-      if (fs.existsSync(runFile)) {
-        fs.unlinkSync(runFile);
-      }
+      deleteRunningFile();
     }
   };
 }
@@ -481,5 +533,9 @@ module.exports = {
   mrgForBytes,
   loadShareState,
   saveShareState,
-  shareStatePath
+  shareStatePath,
+  runningFilePath,
+  readRunningFile,
+  deleteRunningFile,
+  shareDir
 };

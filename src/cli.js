@@ -41,7 +41,7 @@ const {
   summarizeTokenEconomy,
   verifyHashChain
 } = require("./chain");
-const { startShare, earningsReport, DEFAULT_MRG_PER_GB } = require("./share");
+const { startShare, earningsReport, readRunningFile, deleteRunningFile, DEFAULT_MRG_PER_GB } = require("./share");
 const { startIDE } = require("./ide");
 
 async function main(argv) {
@@ -235,6 +235,27 @@ async function closeIDEServer(handle, runningFile) {
  */
 async function shareCommand(flags) {
   const sub = String((flags._ && flags._[0]) || flags.action || "").toLowerCase();
+  if (sub === "history") {
+    const report = earningsReport();
+    const h = report.history || [];
+    if (flags.json) {
+      console.log(JSON.stringify(h, null, 2));
+      return;
+    }
+    if (h.length === 0) {
+      console.log("# No share history yet.");
+      return;
+    }
+    console.log("# MRGMinner bandwidth-share claim history");
+    console.log("# id\t\tat\t\t\tbytes_total\tmrg_earned\tnote");
+    for (const entry of h) {
+      console.log(
+        `${entry.id}\t${entry.at}\t${entry.bytes_total}\t${entry.mrg_earned}\t${entry.note || ""}`
+      );
+    }
+    console.log(`# ${h.length} entries — total lifetime MRG: ${report.mrg_earned_total}`);
+    return;
+  }
   if (sub === "earnings" || flags.earnings) {
     const report = earningsReport();
     if (flags.json) {
@@ -250,15 +271,60 @@ async function shareCommand(flags) {
     return;
   }
   if (sub === "status") {
-    const report = earningsReport();
-    console.log(JSON.stringify({ stream: "bandwidth-share", ...report }, null, 2));
+    const running = readRunningFile();
+    if (!running) {
+      console.log("# No share running.");
+      return;
+    }
+    const alive = running.pid;
+    try {
+      process.kill(running.pid, 0);
+    } catch {
+      console.log("# Share process not running (stale PID file).");
+      console.log(JSON.stringify(running, null, 2));
+      return;
+    }
+    console.log(`# Share running — PID ${running.pid}`);
+    console.log(`control\t${running.control}`);
+    console.log(`socks\t${running.socks}`);
+    console.log(`started_at\t${running.started_at}`);
+    console.log(`pid\t${running.pid}`);
+    if (running.meta) {
+      console.log(`region\t${running.meta.region}\t${running.meta.city}`);
+    }
+    if (running.max_connections) console.log(`max_connections\t${running.max_connections}`);
+    if (running.max_mbps) console.log(`max_mbps\t${running.max_mbps}`);
     return;
   }
   if (sub === "stop") {
-    console.log("Share nodes run in the foreground — stop with Ctrl+C in the share start process.");
+    const running = readRunningFile();
+    if (!running) {
+      console.log("# No share running.");
+      return;
+    }
+    try {
+      process.kill(running.pid, "SIGTERM");
+      console.log(`# Sent SIGTERM to PID ${running.pid}.`);
+      deleteRunningFile();
+    } catch (err) {
+      console.log(`# Could not stop share: ${err.message}`);
+      deleteRunningFile();
+    }
     return;
   }
   if (sub === "start" || flags.start || !sub) {
+    if (flags.detach) {
+      const { spawn } = require("node:child_process");
+      const args = process.argv.slice(2).filter((a) => a !== "--detach");
+      const child = spawn(process.argv[0], [process.argv[1], ...args], {
+        detached: true,
+        stdio: "ignore"
+      });
+      child.unref();
+      console.log(`# Share started in background (PID ${child.pid}).`);
+      console.log("# Use 'mrgminner share status' to check, 'mrgminner share stop' to stop.");
+      return;
+    }
     const settings = await loadSettings(flags.settings, settingsFromFlags(flags)).catch(() => ({
       mergeos: {},
       worker: {}
@@ -277,7 +343,9 @@ async function shareCommand(flags) {
       regions: flags.regions,
       workerId,
       mrgPerGb: flags.mrgPerGb ? Number(flags.mrgPerGb) : DEFAULT_MRG_PER_GB,
-      advertiseHost: flags.advertiseHost || flags.host || "127.0.0.1"
+      advertiseHost: flags.advertiseHost || flags.host || "127.0.0.1",
+      maxConnections: flags.maxConnections || flags["max-connections"],
+      maxMbps: flags.maxMbps || flags["max-mbps"]
     });
     const stats = handle.getStats();
     console.log("# MRGMinner share started (bandwidth → MRG)");
@@ -292,6 +360,8 @@ async function shareCommand(flags) {
       console.log(`regions\t${listed}`);
     }
     console.log(`mrg_per_gb\t${stats.mrg_per_gb}`);
+    if (stats.max_connections) console.log(`max_connections\t${stats.max_connections}`);
+    if (stats.max_mbps) console.log(`max_mbps\t${stats.max_mbps}`);
     console.log(`# TrucVPN: trucvpn configure --share-url ${stats.control}`);
     console.log(`#          trucvpn connect --region ${stats.region}`);
     console.log("# Press Ctrl+C to stop and flush session earnings.");
@@ -321,7 +391,7 @@ async function shareCommand(flags) {
     await new Promise(() => {});
     return;
   }
-  throw new Error(`unknown share subcommand: ${sub || "(empty)"} — use start|status|earnings`);
+  throw new Error(`unknown share subcommand: ${sub || "(empty)"} — use start|status|earnings|history`);
 }
 
 async function configure(flags) {
@@ -1667,9 +1737,11 @@ Usage:
   mrgminner solana [--json] [--mock]            # Solana program + ix map
 
   # Bandwidth share stream (residential exit → earn MRG; pairs with TrucVPN)
-  mrgminner share start [--region vn] [--city "Ho Chi Minh"] [--regions "vn:Ho Chi Minh:70,sg:Singapore:30"] [--port 17890]
+  mrgminner share start [--region vn] [--city "Ho Chi Minh"] [--regions "vn:Ho Chi Minh:70,sg:Singapore:30"] [--port 17890] [--detach] [--max-connections N] [--max-mbps N]
   mrgminner share status
+  mrgminner share history [--json]
   mrgminner share earnings [--json]
+  mrgminner share stop
   # TrucVPN client: trucvpn configure --share-url http://127.0.0.1:17890
   #                 trucvpn connect --region vn
 
