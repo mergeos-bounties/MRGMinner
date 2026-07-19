@@ -612,12 +612,6 @@ async function packCommand(flags) {
   console.log(`Packaged ${artifactRoot} → ${outPath}`);
 }
 
-function redactToken(token) {
-  if (!token) return "(not set)";
-  const keep = Math.max(2, Math.floor(token.length / 6));
-  const stars = token.length - keep * 2;
-  return token.slice(0, keep) + "*".repeat(stars) + token.slice(-keep);
-}
 
 async function statusCommand(flags) {
   const settings = await loadSettings(flags.settings, settingsFromFlags(flags));
