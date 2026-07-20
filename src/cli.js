@@ -43,6 +43,7 @@ const {
 } = require("./chain");
 const { startShare, earningsReport, DEFAULT_MRG_PER_GB } = require("./share");
 const { startIDE } = require("./ide");
+const { EvidencePackager } = require("./evidence-packager");
 
 async function main(argv) {
   const [command = "help", ...rest] = argv;
@@ -708,33 +709,18 @@ function submissionFromFlags(flags) {
 }
 
 async function packCommand(flags) {
-  const { ZipArchive } = await import("archiver");
   const taskId = requiredPositional(flags, "task id");
-  const taskDir = resolveTaskDir(taskId, flags);
-  if (!taskDir) {
-    throw new Error(
-      `Task directory not found for ${taskId}. Run 'mrgminner run ${taskId}' or 'mrgminner prompt ${taskId}' first.`
-    );
-  }
-
-  const zipPath = path.resolve(`${taskId}.zip`);
-  const output = fs.createWriteStream(zipPath);
-  const archive = new ZipArchive({ zlib: { level: 9 } });
-
-  await new Promise((resolve, reject) => {
-    output.on("close", resolve);
-    output.on("error", reject);
-    archive.on("error", reject);
-    archive.pipe(output);
-    archive.directory(taskDir, false);
-    if (flags.prUrl) {
-      archive.append(`${flags.prUrl}\n`, { name: "pr-url.txt" });
-    }
-    archive.finalize();
+  const packager = new EvidencePackager({
+    taskId,
+    workspace: flags.workspace,
+    prUrl: flags.prUrl || flags.pullRequestUrl
   });
+  packager.collectLogs();
+  packager.extractPrUrls();
 
-  const stats = fs.statSync(zipPath);
-  console.log(`Packaged ${zipPath} (${stats.size} bytes)`);
+  const zipPath = path.resolve(flags.out || `${taskId}.zip`);
+  const { bytes } = await packager.pack(zipPath);
+  console.log(`Packaged ${zipPath} (${bytes} bytes)`);
 }
 
 function resolveTaskDir(taskId, flags) {
